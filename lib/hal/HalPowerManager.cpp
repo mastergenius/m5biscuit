@@ -74,7 +74,11 @@ void HalPowerManager::startDeepSleep(HalGPIO& gpio) const {
     delay(50);
     gpio.update();
   }
-  M5.Power.deepSleep();
+  pinMode(M5PAPER_BTN_PUSH, INPUT);
+  M5.Display.sleep();
+  M5.Display.waitDisplay();
+  esp_sleep_enable_ext0_wakeup(static_cast<gpio_num_t>(M5PAPER_BTN_PUSH), 0);
+  esp_deep_sleep_start();
 #else
   // Ensure that the power button has been released to avoid immediately turning back on if you're holding it
   while (gpio.isPressed(HalGPIO::BTN_POWER)) {

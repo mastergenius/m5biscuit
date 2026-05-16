@@ -1,7 +1,9 @@
 #include "ActivityManager.h"
 
+#include <Arduino.h>
 #include <HalPowerManager.h>
 
+#include "HalBoard.h"
 #include "boot_sleep/BootActivity.h"
 #include "boot_sleep/SleepActivity.h"
 #include "browser/OpdsBookBrowserActivity.h"
@@ -15,12 +17,12 @@
 #include "util/FullScreenMessageActivity.h"
 
 void ActivityManager::begin() {
-  xTaskCreate(&renderTaskTrampoline, "ActivityManagerRender",
-              8192,              // Stack size
-              this,              // Parameters
-              1,                 // Priority
-              &renderTaskHandle  // Task handle
-  );
+  xTaskCreateUniversal(&renderTaskTrampoline, "ActivityManagerRender",
+                       8192,                  // Stack size
+                       this,                  // Parameters
+                       1,                     // Priority
+                       &renderTaskHandle,     // Task handle
+                       ARDUINO_RUNNING_CORE);
   assert(renderTaskHandle != nullptr && "Failed to create render task");
 }
 
@@ -48,6 +50,14 @@ void ActivityManager::renderTaskLoop() {
     if (waiter) {
       xTaskNotify(waiter, 1, eIncrement);
     }
+
+    // Slow e-paper refreshes can arrive back-to-back while a touch zone is held.
+    // Block briefly so the ESP32 idle task can run and keep the task WDT fed.
+#if BISCUIT_BOARD_M5PAPER
+    vTaskDelay(pdMS_TO_TICKS(5));
+#else
+    vTaskDelay(pdMS_TO_TICKS(1));
+#endif
   }
 }
 

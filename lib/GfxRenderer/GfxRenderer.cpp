@@ -74,6 +74,19 @@ static inline void rotateCoordinates(const GfxRenderer::Orientation orientation,
 
 enum class TextRotation { None, Rotated90CW };
 
+bool shouldLogMissingGlyph(const uint32_t cp) {
+  static uint32_t loggedCodepoints[8] = {};
+  static uint8_t nextSlot = 0;
+  for (const uint32_t logged : loggedCodepoints) {
+    if (logged == cp) {
+      return false;
+    }
+  }
+  loggedCodepoints[nextSlot] = cp;
+  nextSlot = (nextSlot + 1) % 8;
+  return true;
+}
+
 // Shared glyph rendering logic for normal and rotated text.
 // Coordinate mapping and cursor advance direction are selected at compile time via the template parameter.
 template <TextRotation rotation>
@@ -82,7 +95,9 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
                            const bool pixelState, const EpdFontFamily::Style style) {
   const EpdGlyph* glyph = fontFamily.getGlyph(cp, style);
   if (!glyph) {
-    LOG_ERR("GFX", "No glyph for codepoint %d", cp);
+    if (shouldLogMissingGlyph(cp)) {
+      LOG_DBG("GFX", "No glyph for codepoint %lu", static_cast<unsigned long>(cp));
+    }
     return;
   }
 

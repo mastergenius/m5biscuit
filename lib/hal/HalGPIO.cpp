@@ -231,9 +231,17 @@ void HalGPIO::begin() {
   cfg.output_power = true;
   M5.begin(cfg);
 
-  const bool wireStarted = Wire1.begin(M5PAPER_TOUCH_SDA, M5PAPER_TOUCH_SCL, M5PAPER_TOUCH_I2C_FREQ);
-  Wire1.setTimeOut(5);
-  gt911Address = probeGt911Address();
+  const bool m5TouchAvailable = M5.Touch.isEnabled();
+  const bool displayTouchAvailable = M5.Display.touch() != nullptr;
+  bool wireStarted = false;
+  gt911Address = 0;
+  if (!m5TouchAvailable && !displayTouchAvailable) {
+    wireStarted = Wire1.begin(M5PAPER_TOUCH_SDA, M5PAPER_TOUCH_SCL, M5PAPER_TOUCH_I2C_FREQ);
+    if (wireStarted) {
+      Wire1.setTimeOut(5);
+      gt911Address = probeGt911Address();
+    }
+  }
   LOG_INF("GPIO", "M5Paper touch init: m5=%d display=%d wire1=%d gt911=0x%02x", M5.Touch.isEnabled(),
           M5.Display.touch() != nullptr, wireStarted, gt911Address);
 
@@ -326,6 +334,9 @@ bool HalGPIO::isUsbConnected() const { return M5.Power.isCharging() == m5::Power
 HalGPIO::WakeupReason HalGPIO::getWakeupReason() const {
   const auto wakeupCause = esp_sleep_get_wakeup_cause();
   const auto resetReason = esp_reset_reason();
+  if (wakeupCause == ESP_SLEEP_WAKEUP_EXT0 && resetReason == ESP_RST_DEEPSLEEP) {
+    return WakeupReason::PowerButton;
+  }
   if (wakeupCause == ESP_SLEEP_WAKEUP_UNDEFINED && resetReason == ESP_RST_UNKNOWN && isUsbConnected()) {
     return WakeupReason::AfterFlash;
   }
