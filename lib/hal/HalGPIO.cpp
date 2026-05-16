@@ -17,51 +17,210 @@ constexpr int M5PAPER_TOUCH_WIDTH = BISCUIT_DISPLAY_HEIGHT;    // portrait touch
 constexpr int M5PAPER_TOUCH_HEIGHT = BISCUIT_DISPLAY_WIDTH;    // portrait touch coordinates: 960 px
 constexpr int M5PAPER_TOUCH_BOTTOM_HIT_HEIGHT = 80;
 constexpr int M5PAPER_TOUCH_SIDE_HIT_WIDTH = 72;
+constexpr int M5PAPER_TOUCH_SDA = 21;
+constexpr int M5PAPER_TOUCH_SCL = 22;
+constexpr uint32_t M5PAPER_TOUCH_I2C_FREQ = 400000;
+constexpr uint8_t GT911_ADDR_5D = 0x5D;
+constexpr uint8_t GT911_ADDR_14 = 0x14;
+constexpr uint16_t GT911_PRODUCT_ID_REG = 0x8140;
+constexpr uint16_t GT911_STATUS_REG = 0x814E;
+constexpr uint16_t GT911_FIRST_POINT_REG = 0x814F;
 
 bool readActiveLowButton(uint8_t pin) { return digitalRead(pin) == LOW; }
 
-void applyM5PaperTouchZones(bool nextState[7]) {
-  if (!M5.Touch.isEnabled()) {
+enum class M5PaperTouchSource : uint8_t { None, M5Unified, M5GfxRaw, Gt911Wire };
+
+uint8_t gt911Address = 0;
+bool m5paperTouchWasPressed = false;
+
+const char* touchSourceName(M5PaperTouchSource source) {
+  switch (source) {
+    case M5PaperTouchSource::M5Unified:
+      return "M5Unified";
+    case M5PaperTouchSource::M5GfxRaw:
+      return "M5GFXRaw";
+    case M5PaperTouchSource::Gt911Wire:
+      return "GT911Wire";
+    case M5PaperTouchSource::None:
+    default:
+      return "None";
+  }
+}
+
+void normalizeM5PaperDisplayTouch(int* x, int* y) {
+  if (M5.Display.width() == M5PAPER_TOUCH_HEIGHT && M5.Display.height() == M5PAPER_TOUCH_WIDTH) {
+    const int rawX = *x;
+    const int rawY = *y;
+    if (rawX >= 0 && rawX < M5PAPER_TOUCH_HEIGHT && rawY >= 0 && rawY < M5PAPER_TOUCH_WIDTH) {
+      *x = M5PAPER_TOUCH_WIDTH - 1 - rawY;
+      *y = rawX;
+    }
+  }
+}
+
+bool gt911Read(uint8_t address, uint16_t reg, uint8_t* data, size_t len) {
+  Wire1.beginTransmission(address);
+  Wire1.write(static_cast<uint8_t>(reg >> 8));
+  Wire1.write(static_cast<uint8_t>(reg & 0xFF));
+  if (Wire1.endTransmission(false) != 0) {
+    return false;
+  }
+
+  const size_t received = Wire1.requestFrom(static_cast<int>(address), static_cast<int>(len));
+  for (size_t i = 0; i < received && i < len; ++i) {
+    data[i] = Wire1.read();
+  }
+  while (Wire1.available()) {
+    Wire1.read();
+  }
+  return received == len;
+}
+
+bool gt911WriteByte(uint8_t address, uint16_t reg, uint8_t value) {
+  Wire1.beginTransmission(address);
+  Wire1.write(static_cast<uint8_t>(reg >> 8));
+  Wire1.write(static_cast<uint8_t>(reg & 0xFF));
+  Wire1.write(value);
+  return Wire1.endTransmission() == 0;
+}
+
+uint8_t probeGt911Address() {
+  uint8_t productId[4] = {};
+  for (const uint8_t address : {GT911_ADDR_5D, GT911_ADDR_14}) {
+    if (gt911Read(address, GT911_PRODUCT_ID_REG, productId, sizeof(productId))) {
+      gt911WriteByte(address, GT911_STATUS_REG, 0);
+      return address;
+    }
+  }
+  return 0;
+}
+
+bool readGt911WireTouch(int* outX, int* outY) {
+  if (gt911Address == 0) {
+    return false;
+  }
+
+  uint8_t status = 0;
+  if (!gt911Read(gt911Address, GT911_STATUS_REG, &status, 1) || (status & 0x80) == 0) {
+    return false;
+  }
+
+  const uint8_t pointCount = status & 0x0F;
+  if (pointCount == 0 || pointCount > 5) {
+    gt911WriteByte(gt911Address, GT911_STATUS_REG, 0);
+    return false;
+  }
+
+  uint8_t point[8] = {};
+  const bool ok = gt911Read(gt911Address, GT911_FIRST_POINT_REG, point, sizeof(point));
+  gt911WriteByte(gt911Address, GT911_STATUS_REG, 0);
+  if (!ok) {
+    return false;
+  }
+
+  *outX = point[1] | (static_cast<int>(point[2]) << 8);
+  *outY = point[3] | (static_cast<int>(point[4]) << 8);
+  return true;
+}
+
+void applyM5PaperTouchPoint(bool nextState[7], int x, int y) {
+  if (x < 0 || y < 0 || x >= M5PAPER_TOUCH_WIDTH || y >= M5PAPER_TOUCH_HEIGHT) {
     return;
   }
 
-  const uint8_t touchCount = M5.Touch.getCount();
-  for (uint8_t i = 0; i < touchCount; ++i) {
-    const auto& touch = M5.Touch.getDetail(i);
-    if (!touch.isPressed() || touch.x < 0 || touch.y < 0) {
-      continue;
+  if (y >= M5PAPER_TOUCH_HEIGHT - M5PAPER_TOUCH_BOTTOM_HIT_HEIGHT) {
+    const int zone = (x * 4) / M5PAPER_TOUCH_WIDTH;
+    switch (zone) {
+      case 0:
+        nextState[HalGPIO::BTN_BACK] = true;
+        break;
+      case 1:
+        nextState[HalGPIO::BTN_CONFIRM] = true;
+        break;
+      case 2:
+        nextState[HalGPIO::BTN_LEFT] = true;
+        break;
+      default:
+        nextState[HalGPIO::BTN_RIGHT] = true;
+        break;
     }
+    return;
+  }
 
-    const int x = touch.x;
-    const int y = touch.y;
-    if (x >= M5PAPER_TOUCH_WIDTH || y >= M5PAPER_TOUCH_HEIGHT) {
-      continue;
-    }
+  if (x >= M5PAPER_TOUCH_WIDTH - M5PAPER_TOUCH_SIDE_HIT_WIDTH) {
+    const int sideHeight = M5PAPER_TOUCH_HEIGHT - M5PAPER_TOUCH_BOTTOM_HIT_HEIGHT;
+    nextState[y < sideHeight / 2 ? HalGPIO::BTN_UP : HalGPIO::BTN_DOWN] = true;
+  }
+}
 
-    if (y >= M5PAPER_TOUCH_HEIGHT - M5PAPER_TOUCH_BOTTOM_HIT_HEIGHT) {
-      const int zone = (x * 4) / M5PAPER_TOUCH_WIDTH;
-      switch (zone) {
-        case 0:
-          nextState[HalGPIO::BTN_BACK] = true;
-          break;
-        case 1:
-          nextState[HalGPIO::BTN_CONFIRM] = true;
-          break;
-        case 2:
-          nextState[HalGPIO::BTN_LEFT] = true;
-          break;
-        default:
-          nextState[HalGPIO::BTN_RIGHT] = true;
-          break;
+void applyM5PaperTouchZones(bool nextState[7]) {
+  bool touched = false;
+  int logX = -1;
+  int logY = -1;
+  int logRawX = -1;
+  int logRawY = -1;
+  M5PaperTouchSource logSource = M5PaperTouchSource::None;
+
+  if (M5.Touch.isEnabled()) {
+    const uint8_t touchCount = M5.Touch.getCount();
+    for (uint8_t i = 0; i < touchCount; ++i) {
+      const auto& touch = M5.Touch.getDetail(i);
+      if (!touch.isPressed()) {
+        continue;
       }
-      continue;
-    }
 
-    if (x >= M5PAPER_TOUCH_WIDTH - M5PAPER_TOUCH_SIDE_HIT_WIDTH) {
-      const int sideHeight = M5PAPER_TOUCH_HEIGHT - M5PAPER_TOUCH_BOTTOM_HIT_HEIGHT;
-      nextState[y < sideHeight / 2 ? HalGPIO::BTN_UP : HalGPIO::BTN_DOWN] = true;
+      int x = touch.x;
+      int y = touch.y;
+      normalizeM5PaperDisplayTouch(&x, &y);
+      touched = true;
+      if (logSource == M5PaperTouchSource::None) {
+        logRawX = touch.x;
+        logRawY = touch.y;
+        logX = x;
+        logY = y;
+        logSource = M5PaperTouchSource::M5Unified;
+      }
+      applyM5PaperTouchPoint(nextState, x, y);
     }
   }
+
+  if (!touched) {
+    m5gfx::touch_point_t point = {};
+    if (M5.Display.getTouch(&point, 1) > 0) {
+      int x = point.x;
+      int y = point.y;
+      normalizeM5PaperDisplayTouch(&x, &y);
+      touched = true;
+      logRawX = point.x;
+      logRawY = point.y;
+      logX = x;
+      logY = y;
+      logSource = M5PaperTouchSource::M5GfxRaw;
+      applyM5PaperTouchPoint(nextState, x, y);
+    }
+  }
+
+  if (!touched) {
+    int x = 0;
+    int y = 0;
+    if (readGt911WireTouch(&x, &y)) {
+      touched = true;
+      logRawX = x;
+      logRawY = y;
+      logX = x;
+      logY = y;
+      logSource = M5PaperTouchSource::Gt911Wire;
+      applyM5PaperTouchPoint(nextState, x, y);
+    }
+  }
+
+  if (touched && !m5paperTouchWasPressed) {
+    LOG_INF("GPIO", "M5Paper touch down source=%s raw=%d,%d mapped=%d,%d", touchSourceName(logSource), logRawX,
+            logRawY, logX, logY);
+  } else if (!touched && m5paperTouchWasPressed) {
+    LOG_INF("GPIO", "M5Paper touch up");
+  }
+  m5paperTouchWasPressed = touched;
 }
 }  // namespace
 
@@ -71,6 +230,12 @@ void HalGPIO::begin() {
   cfg.clear_display = false;
   cfg.output_power = true;
   M5.begin(cfg);
+
+  const bool wireStarted = Wire1.begin(M5PAPER_TOUCH_SDA, M5PAPER_TOUCH_SCL, M5PAPER_TOUCH_I2C_FREQ);
+  Wire1.setTimeOut(5);
+  gt911Address = probeGt911Address();
+  LOG_INF("GPIO", "M5Paper touch init: m5=%d display=%d wire1=%d gt911=0x%02x", M5.Touch.isEnabled(),
+          M5.Display.touch() != nullptr, wireStarted, gt911Address);
 
   _deviceType = DeviceType::M5Paper;
   pinMode(M5PAPER_BTN_LEFT, INPUT);

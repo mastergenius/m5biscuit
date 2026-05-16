@@ -33,7 +33,12 @@ class HalPowerManager {
   SemaphoreHandle_t modeMutex = nullptr;  // Protect access to currentLockMode
 
  public:
-  static constexpr int LOW_POWER_FREQ = 10;                    // MHz
+  static constexpr int LOW_POWER_FREQ =
+#if BISCUIT_BOARD_M5PAPER
+      80;  // MHz: GT911/I2C touch becomes unreliable at 10 MHz on original M5Paper.
+#else
+      10;  // MHz
+#endif
   static constexpr unsigned long IDLE_POWER_SAVING_MS = 3000;  // ms
   static constexpr unsigned long BATTERY_POLL_MS = 1500;       // ms
 
