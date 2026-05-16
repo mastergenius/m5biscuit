@@ -319,24 +319,39 @@ void NoirTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const c
   const GfxRenderer::Orientation orig_orientation = renderer.getOrientation();
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
 
+  const int pageWidth = renderer.getScreenWidth();
   const int pageHeight = renderer.getScreenHeight();
-  constexpr int buttonWidth = 80;
+  int buttonWidth = 80;
   constexpr int smallButtonHeight = 15;
   constexpr int buttonHeight = NoirMetrics::values.buttonHintsHeight;
   constexpr int buttonY = NoirMetrics::values.buttonHintsHeight;
   constexpr int textYOffset = 7;
   constexpr int buttonPositions[] = {58, 146, 254, 342};
+  int m5ButtonPositions[] = {0, 0, 0, 0};
+  const int* activeButtonPositions = buttonPositions;
+  if (gpio.deviceIsM5Paper()) {
+    constexpr int gap = 8;
+    buttonWidth = (pageWidth - gap * 5) / 4;
+    if (buttonWidth < 1) {
+      buttonWidth = 1;
+    }
+    for (int i = 0; i < 4; ++i) {
+      m5ButtonPositions[i] = gap + i * (buttonWidth + gap);
+    }
+    activeButtonPositions = m5ButtonPositions;
+  }
   const char* labels[] = {btn1, btn2, btn3, btn4};
 
   for (int i = 0; i < 4; i++) {
-    const int x = buttonPositions[i];
+    const int x = activeButtonPositions[i];
     if (labels[i] != nullptr && labels[i][0] != '\0') {
       // Black filled rounded button with white text
       renderer.fillRoundedRect(x, pageHeight - buttonY, buttonWidth, buttonHeight, cornerRadius, Color::Black);
       if (!BaseTheme::drawArrowIfNeeded(renderer, labels[i], x + buttonWidth / 2, pageHeight - buttonY + buttonHeight / 2, 5, false)) {
-        const int textWidth = renderer.getTextWidth(SMALL_FONT_ID, labels[i]);
+        const std::string label = renderer.truncatedText(SMALL_FONT_ID, labels[i], buttonWidth - 8);
+        const int textWidth = renderer.getTextWidth(SMALL_FONT_ID, label.c_str());
         const int textX = x + (buttonWidth - 1 - textWidth) / 2;
-        renderer.drawText(SMALL_FONT_ID, textX, pageHeight - buttonY + textYOffset, labels[i], false);  // white text
+        renderer.drawText(SMALL_FONT_ID, textX, pageHeight - buttonY + textYOffset, label.c_str(), false);
       }
     } else {
       // Empty button: just a thin outline

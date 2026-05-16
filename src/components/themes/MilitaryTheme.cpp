@@ -1,6 +1,7 @@
 #include "MilitaryTheme.h"
 
 #include <GfxRenderer.h>
+#include <HalGPIO.h>
 #include <HalPowerManager.h>
 #include <I18n.h>
 #include <Logging.h>
@@ -271,17 +272,31 @@ void MilitaryTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, con
   const GfxRenderer::Orientation orig_orientation = renderer.getOrientation();
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
 
+  const int pageWidth = renderer.getScreenWidth();
   const int pageHeight = renderer.getScreenHeight();
-  constexpr int buttonWidth = 106;
+  int buttonWidth = 106;
   constexpr int buttonHeight = MilitaryMetrics::values.buttonHintsHeight;
   constexpr int buttonY = MilitaryMetrics::values.buttonHintsHeight;
   constexpr int textYOffset = 7;
   constexpr int buttonPositions[] = {25, 130, 245, 350};
+  int m5ButtonPositions[] = {0, 0, 0, 0};
+  const int* activeButtonPositions = buttonPositions;
+  if (gpio.deviceIsM5Paper()) {
+    constexpr int gap = 8;
+    buttonWidth = (pageWidth - gap * 5) / 4;
+    if (buttonWidth < 1) {
+      buttonWidth = 1;
+    }
+    for (int i = 0; i < 4; ++i) {
+      m5ButtonPositions[i] = gap + i * (buttonWidth + gap);
+    }
+    activeButtonPositions = m5ButtonPositions;
+  }
   const char* labels[] = {btn1, btn2, btn3, btn4};
 
   for (int i = 0; i < 4; i++) {
     if (labels[i] != nullptr && labels[i][0] != '\0') {
-      const int x = buttonPositions[i];
+      const int x = activeButtonPositions[i];
       const int y = pageHeight - buttonY;
 
       // Clear area
@@ -298,7 +313,11 @@ void MilitaryTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, con
         }
 
         const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, bracketLabel.c_str());
-        const int textX = x + (buttonWidth - 1 - textWidth) / 2;
+        if (textWidth > buttonWidth - 8) {
+          bracketLabel = renderer.truncatedText(UI_10_FONT_ID, bracketLabel.c_str(), buttonWidth - 8);
+        }
+        const int visibleTextWidth = renderer.getTextWidth(UI_10_FONT_ID, bracketLabel.c_str());
+        const int textX = x + (buttonWidth - 1 - visibleTextWidth) / 2;
         renderer.drawText(UI_10_FONT_ID, textX, y + textYOffset, bracketLabel.c_str());
       }
     }

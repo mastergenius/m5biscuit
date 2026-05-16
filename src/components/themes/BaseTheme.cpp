@@ -189,15 +189,28 @@ void BaseTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const c
   const GfxRenderer::Orientation orig_orientation = renderer.getOrientation();
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
 
+  const int pageWidth = renderer.getScreenWidth();
   const int pageHeight = renderer.getScreenHeight();
-  constexpr int buttonWidth = 106;
+  int buttonWidth = 106;
   constexpr int buttonHeight = BaseMetrics::values.buttonHintsHeight;
   constexpr int buttonY = BaseMetrics::values.buttonHintsHeight;  // Distance from bottom
   constexpr int textYOffset = 7;                                  // Distance from top of button to text baseline
   // X3 has wider screen in portrait (528 vs 480), use more spacing
   constexpr int x4ButtonPositions[] = {25, 130, 245, 350};
   constexpr int x3ButtonPositions[] = {38, 154, 268, 384};
+  int m5ButtonPositions[] = {0, 0, 0, 0};
   const int* buttonPositions = gpio.deviceIsX3() ? x3ButtonPositions : x4ButtonPositions;
+  if (gpio.deviceIsM5Paper()) {
+    constexpr int gap = 8;
+    buttonWidth = (pageWidth - gap * 5) / 4;
+    if (buttonWidth < 1) {
+      buttonWidth = 1;
+    }
+    for (int i = 0; i < 4; ++i) {
+      m5ButtonPositions[i] = gap + i * (buttonWidth + gap);
+    }
+    buttonPositions = m5ButtonPositions;
+  }
   const char* labels[] = {btn1, btn2, btn3, btn4};
 
   for (int i = 0; i < 4; i++) {
@@ -207,9 +220,10 @@ void BaseTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const c
       renderer.fillRect(x, pageHeight - buttonY, buttonWidth, buttonHeight, false);
       renderer.drawRect(x, pageHeight - buttonY, buttonWidth, buttonHeight);
       if (!drawArrowIfNeeded(renderer, labels[i], x + buttonWidth / 2, pageHeight - buttonY + buttonHeight / 2, 6, true)) {
-        const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, labels[i]);
+        const std::string label = renderer.truncatedText(UI_10_FONT_ID, labels[i], buttonWidth - 8);
+        const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, label.c_str());
         const int textX = x + (buttonWidth - 1 - textWidth) / 2;
-        renderer.drawText(UI_10_FONT_ID, textX, pageHeight - buttonY + textYOffset, labels[i]);
+        renderer.drawText(UI_10_FONT_ID, textX, pageHeight - buttonY + textYOffset, label.c_str());
       }
     }
   }

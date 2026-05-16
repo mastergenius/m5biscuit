@@ -336,8 +336,9 @@ void LyraTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const c
   const GfxRenderer::Orientation orig_orientation = renderer.getOrientation();
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
 
+  const int pageWidth = renderer.getScreenWidth();
   const int pageHeight = renderer.getScreenHeight();
-  constexpr int buttonWidth = 80;
+  int buttonWidth = 80;
   constexpr int smallButtonHeight = 15;
   constexpr int buttonHeight = LyraMetrics::values.buttonHintsHeight;
   constexpr int buttonY = LyraMetrics::values.buttonHintsHeight;  // Distance from bottom
@@ -345,7 +346,19 @@ void LyraTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const c
   // X3 has wider screen in portrait (528 vs 480), use more spacing
   constexpr int x4ButtonPositions[] = {58, 146, 254, 342};
   constexpr int x3ButtonPositions[] = {65, 157, 291, 383};
+  int m5ButtonPositions[] = {0, 0, 0, 0};
   const int* buttonPositions = gpio.deviceIsX3() ? x3ButtonPositions : x4ButtonPositions;
+  if (gpio.deviceIsM5Paper()) {
+    constexpr int gap = 8;
+    buttonWidth = (pageWidth - gap * 5) / 4;
+    if (buttonWidth < 1) {
+      buttonWidth = 1;
+    }
+    for (int i = 0; i < 4; ++i) {
+      m5ButtonPositions[i] = gap + i * (buttonWidth + gap);
+    }
+    buttonPositions = m5ButtonPositions;
+  }
   const char* labels[] = {btn1, btn2, btn3, btn4};
 
   for (int i = 0; i < 4; i++) {
@@ -356,9 +369,10 @@ void LyraTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const c
       renderer.drawRoundedRect(x, pageHeight - buttonY, buttonWidth, buttonHeight, 1, cornerRadius, true, true, false,
                                false, true);
       if (!BaseTheme::drawArrowIfNeeded(renderer, labels[i], x + buttonWidth / 2, pageHeight - buttonY + buttonHeight / 2, 5, true)) {
-        const int textWidth = renderer.getTextWidth(SMALL_FONT_ID, labels[i]);
+        const std::string label = renderer.truncatedText(SMALL_FONT_ID, labels[i], buttonWidth - 8);
+        const int textWidth = renderer.getTextWidth(SMALL_FONT_ID, label.c_str());
         const int textX = x + (buttonWidth - 1 - textWidth) / 2;
-        renderer.drawText(SMALL_FONT_ID, textX, pageHeight - buttonY + textYOffset, labels[i]);
+        renderer.drawText(SMALL_FONT_ID, textX, pageHeight - buttonY + textYOffset, label.c_str());
       }
     } else {
       // Draw the filled background and border for a SMALL-sized button

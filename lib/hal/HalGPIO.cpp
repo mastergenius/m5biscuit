@@ -13,7 +13,56 @@ HalGPIO gpio;
 #include <M5Unified.h>
 
 namespace {
+constexpr int M5PAPER_TOUCH_WIDTH = BISCUIT_DISPLAY_HEIGHT;    // portrait touch coordinates: 540 px
+constexpr int M5PAPER_TOUCH_HEIGHT = BISCUIT_DISPLAY_WIDTH;    // portrait touch coordinates: 960 px
+constexpr int M5PAPER_TOUCH_BOTTOM_HIT_HEIGHT = 80;
+constexpr int M5PAPER_TOUCH_SIDE_HIT_WIDTH = 72;
+
 bool readActiveLowButton(uint8_t pin) { return digitalRead(pin) == LOW; }
+
+void applyM5PaperTouchZones(bool nextState[7]) {
+  if (!M5.Touch.isEnabled()) {
+    return;
+  }
+
+  const uint8_t touchCount = M5.Touch.getCount();
+  for (uint8_t i = 0; i < touchCount; ++i) {
+    const auto& touch = M5.Touch.getDetail(i);
+    if (!touch.isPressed() || touch.x < 0 || touch.y < 0) {
+      continue;
+    }
+
+    const int x = touch.x;
+    const int y = touch.y;
+    if (x >= M5PAPER_TOUCH_WIDTH || y >= M5PAPER_TOUCH_HEIGHT) {
+      continue;
+    }
+
+    if (y >= M5PAPER_TOUCH_HEIGHT - M5PAPER_TOUCH_BOTTOM_HIT_HEIGHT) {
+      const int zone = (x * 4) / M5PAPER_TOUCH_WIDTH;
+      switch (zone) {
+        case 0:
+          nextState[HalGPIO::BTN_BACK] = true;
+          break;
+        case 1:
+          nextState[HalGPIO::BTN_CONFIRM] = true;
+          break;
+        case 2:
+          nextState[HalGPIO::BTN_LEFT] = true;
+          break;
+        default:
+          nextState[HalGPIO::BTN_RIGHT] = true;
+          break;
+      }
+      continue;
+    }
+
+    if (x >= M5PAPER_TOUCH_WIDTH - M5PAPER_TOUCH_SIDE_HIT_WIDTH) {
+      const int sideHeight = M5PAPER_TOUCH_HEIGHT - M5PAPER_TOUCH_BOTTOM_HIT_HEIGHT;
+      nextState[y < sideHeight / 2 ? HalGPIO::BTN_UP : HalGPIO::BTN_DOWN] = true;
+    }
+  }
+}
 }  // namespace
 
 void HalGPIO::begin() {
@@ -46,6 +95,7 @@ void HalGPIO::update() {
   nextState[BTN_CONFIRM] = push;
   nextState[BTN_POWER] = push;
   nextState[BTN_RIGHT] = right;
+  applyM5PaperTouchZones(nextState);
 
   bool anyPressed = false;
   for (uint8_t i = 0; i < 7; ++i) {
