@@ -126,6 +126,53 @@ EpdFontFamily ui12FontFamily(&ui12RegularFont, &ui12BoldFont);
 unsigned long t1 = 0;
 unsigned long t2 = 0;
 
+#if BISCUIT_BOARD_M5PAPER && defined(ENABLE_SERIAL_LOG)
+void m5paperBootLog(const char* stage) {
+  logSerial.printf("[M5PAPER][%lu] %s heap=%u psram=%u\n", millis(), stage, ESP.getFreeHeap(), ESP.getFreePsram());
+  logSerial.flush();
+}
+
+void m5paperSetBootPixel(uint16_t x, uint16_t y, bool black) {
+  uint8_t* buffer = display.getFrameBuffer();
+  if (!buffer || x >= HalDisplay::DISPLAY_WIDTH || y >= HalDisplay::DISPLAY_HEIGHT) {
+    return;
+  }
+  const size_t byteIndex = static_cast<size_t>(y) * HalDisplay::DISPLAY_WIDTH_BYTES + (x / 8);
+  const uint8_t bitMask = 0x80 >> (x % 8);
+  if (black) {
+    buffer[byteIndex] &= ~bitMask;
+  } else {
+    buffer[byteIndex] |= bitMask;
+  }
+}
+
+void m5paperFillBootRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, bool black) {
+  const uint16_t maxX = min<uint16_t>(HalDisplay::DISPLAY_WIDTH, x + w);
+  const uint16_t maxY = min<uint16_t>(HalDisplay::DISPLAY_HEIGHT, y + h);
+  for (uint16_t py = y; py < maxY; ++py) {
+    for (uint16_t px = x; px < maxX; ++px) {
+      m5paperSetBootPixel(px, py, black);
+    }
+  }
+}
+
+void m5paperShowBootPattern(uint8_t stage) {
+  display.clearScreen(0xFF);
+  m5paperFillBootRect(0, 0, HalDisplay::DISPLAY_WIDTH, 8, true);
+  m5paperFillBootRect(0, HalDisplay::DISPLAY_HEIGHT - 8, HalDisplay::DISPLAY_WIDTH, 8, true);
+  m5paperFillBootRect(0, 0, 8, HalDisplay::DISPLAY_HEIGHT, true);
+  m5paperFillBootRect(HalDisplay::DISPLAY_WIDTH - 8, 0, 8, HalDisplay::DISPLAY_HEIGHT, true);
+  m5paperFillBootRect(24, 24, 220, 72, true);
+  for (uint8_t i = 0; i < stage; ++i) {
+    m5paperFillBootRect(40 + i * 48, 116, 28, 180, true);
+  }
+  display.displayBuffer(HalDisplay::FULL_REFRESH, false);
+}
+#else
+void m5paperBootLog(const char*) {}
+void m5paperShowBootPattern(uint8_t) {}
+#endif
+
 // Verify power button press duration on wake-up from deep sleep
 // Pre-condition: isWakeupByPowerButton() == true
 void verifyPowerButtonDuration() {
@@ -192,7 +239,14 @@ void enterDeepSleep() {
 }
 
 void setupDisplayAndFonts() {
+  m5paperBootLog("display.begin: start");
   display.begin();
+  m5paperBootLog("display.begin: done");
+#if BISCUIT_BOARD_M5PAPER && defined(ENABLE_SERIAL_LOG)
+  m5paperBootLog("boot pattern: start");
+  m5paperShowBootPattern(1);
+  m5paperBootLog("boot pattern: done");
+#endif
   renderer.begin();
   activityManager.begin();
   LOG_DBG("MAIN", "Display initialized");
@@ -227,11 +281,26 @@ void setupDisplayAndFonts() {
 void setup() {
   t1 = millis();
 
+#if BISCUIT_BOARD_M5PAPER && defined(ENABLE_SERIAL_LOG)
+  logSerial.begin(115200);
+  delay(100);
+  logSerial.printf("\n[M5PAPER][%lu] boot: serial ready heap=%u psram=%u\n", millis(), ESP.getFreeHeap(),
+                   ESP.getFreePsram());
+  logSerial.flush();
+#endif
+
+  m5paperBootLog("HalSystem.begin: start");
   HalSystem::begin();
+  m5paperBootLog("HalSystem.begin: done");
+  m5paperBootLog("gpio.begin: start");
   gpio.begin();
+  m5paperBootLog("gpio.begin: done");
+  m5paperBootLog("power.begin: start");
   powerManager.begin();
+  m5paperBootLog("power.begin: done");
 
 #ifdef ENABLE_SERIAL_LOG
+#if !BISCUIT_BOARD_M5PAPER
   if (gpio.isUsbConnected()) {
     Serial.begin(115200);
     const unsigned long start = millis();
@@ -240,17 +309,23 @@ void setup() {
     }
   }
 #endif
+#endif
 
   LOG_INF("MAIN", "Hardware detect: %s", gpio.deviceIsM5Paper() ? "M5Paper" : (gpio.deviceIsX3() ? "X3" : "X4"));
 
+  setupDisplayAndFonts();
+  m5paperShowBootPattern(2);
+
   // SD Card Initialization
   // We need 6 open files concurrently when parsing a new chapter
+  m5paperBootLog("Storage.begin: start");
   if (!Storage.begin()) {
+    m5paperBootLog("Storage.begin: failed");
     LOG_ERR("MAIN", "SD card initialization failed");
-    setupDisplayAndFonts();
     activityManager.goToFullScreenMessage("SD card error", EpdFontFamily::BOLD);
     return;
   }
+  m5paperBootLog("Storage.begin: done");
 
   HalSystem::checkPanic();
   HalSystem::clearPanic();  // TODO: move this to an activity when we have one to display the panic info
@@ -282,8 +357,6 @@ void setup() {
 
   // First serial output only here to avoid timing inconsistencies for power button press duration verification
   LOG_DBG("MAIN", "Starting Biscuit version " CROSSPOINT_VERSION);
-
-  setupDisplayAndFonts();
 
   activityManager.goToBoot();
 

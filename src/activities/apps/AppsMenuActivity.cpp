@@ -1,10 +1,16 @@
 #include "AppsMenuActivity.h"
 
 #include <I18n.h>
+#include <HalBoard.h>
 
 #include "AppCategoryActivity.h"
+#if BISCUIT_HAS_BLE
 #include "BleProximityActivity.h"
 #include "BleScannerActivity.h"
+#include "BleContactExchangeActivity.h"
+#include "PhoneTetherActivity.h"
+#include "TrackerDetectorActivity.h"
+#endif
 #include "CasinoActivity.h"
 #include "OffenseMenuActivity.h"
 #include "ChessActivity.h"
@@ -71,9 +77,6 @@
 #include "SteganographyActivity.h"
 #include "HabitTrackerActivity.h"
 #include "ReadingStatsActivity.h"
-#include "TrackerDetectorActivity.h"
-#include "PhoneTetherActivity.h"
-#include "BleContactExchangeActivity.h"
 #include "EmergencyActivity.h"
 #include "MeshChatActivity.h"
 #include "MedicalCardActivity.h"
@@ -158,7 +161,9 @@ void AppsMenuActivity::loop() {
                 {"AP History", "Log APs over time to SD", UIIcon::Recent, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<ApHistoryLoggerActivity>(r, m); }},
                 {"Network Change", "Diff snapshots of nearby devices", UIIcon::File, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<NetworkChangeActivity>(r, m); }},
                 {"Perimeter Watch", "Alert on new devices in area", UIIcon::Hotspot, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<PerimeterWatchActivity>(r, m); }},
+#if BISCUIT_HAS_BLE
                 {"BLE Proximity", "Track BLE device RSSI", UIIcon::Hotspot, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<BleProximityActivity>(r, m); }},
+#endif
                 {"WiFi Heat Map", "RSSI mapping walkabout", UIIcon::Wifi, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<WifiHeatMapActivity>(r, m); }},
                 {"Signal Locator", "Estimate AP position via RSSI", UIIcon::Wifi, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<SignalTriangulationActivity>(r, m); }},
                 {"Deauth Detector", "Monitor deauth frame spikes", UIIcon::Wifi, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<DeauthDetectorActivity>(r, m); }},
@@ -174,10 +179,14 @@ void AppsMenuActivity::loop() {
                 {"* Ghost Mode", "MAC rotate + RF kill + cleanup", UIIcon::Settings, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<GhostActivity>(r, m); }},
                 {"Emergency SOS", "SOS beacon + dead man switch", UIIcon::Hotspot, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<EmergencyActivity>(r, m); }},
                 AppCategoryActivity::SectionHeader("DETECTION"),
+#if BISCUIT_HAS_BLE
                 {"Tracker Detector", "Detect AirTags following you", UIIcon::Hotspot, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<TrackerDetectorActivity>(r, m); }},
                 {"Security Sweep", "Scan for cameras/trackers/rogues", UIIcon::Settings, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<SweepActivity>(r, m); }},
+#endif
                 {"Network Monitor", "Detect rogue APs + suspicious frames", UIIcon::Wifi, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<NetworkMonitorActivity>(r, m); }},
+#if BISCUIT_HAS_BLE
                 {"Phone Tether", "BLE proximity disconnect alert", UIIcon::Hotspot, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<PhoneTetherActivity>(r, m); }},
+#endif
                 AppCategoryActivity::SectionHeader("DEVICE SECURITY"),
                 {"Quick Wipe", "Erase all biscuit data from SD", UIIcon::Folder, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<QuickWipeActivity>(r, m); }},
                 {"Captured Data", "Review captured creds/handshakes/PCAPs", UIIcon::File, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<LootActivity>(r, m); }},
@@ -192,7 +201,9 @@ void AppsMenuActivity::loop() {
             std::vector<AppCategoryActivity::AppEntry> e = {
                 {"Mesh Chat", "ESP-NOW text chat, no WiFi needed", UIIcon::Transfer, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<MeshChatActivity>(r, m); }},
                 {"SSID Channel", "Hide messages in WiFi names", UIIcon::Wifi, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<SsidChannelActivity>(r, m); }},
+#if BISCUIT_HAS_BLE
                 {"Contact Exchange", "Swap contact cards via BLE", UIIcon::Transfer, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<BleContactExchangeActivity>(r, m); }},
+#endif
                 {"Dead Drop", "Anonymous file exchange AP", UIIcon::Hotspot, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<DeadDropActivity>(r, m); }},
                 {"Bulletin Board", "Local anonymous message board", UIIcon::Hotspot, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<BulletinBoardActivity>(r, m); }},
             };
@@ -369,7 +380,9 @@ void AppsMenuActivity::loop() {
               {"AP History", "Log APs over time to SD", UIIcon::Recent, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<ApHistoryLoggerActivity>(r, m); }},
               {"Network Change", "Diff snapshots of nearby devices", UIIcon::File, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<NetworkChangeActivity>(r, m); }},
               {"Perimeter Watch", "Alert on new devices in area", UIIcon::Hotspot, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<PerimeterWatchActivity>(r, m); }},
+#if BISCUIT_HAS_BLE
               {"BLE Proximity", "Track BLE device RSSI", UIIcon::Hotspot, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<BleProximityActivity>(r, m); }},
+#endif
               {"WiFi Heat Map", "RSSI mapping walkabout", UIIcon::Wifi, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<WifiHeatMapActivity>(r, m); }},
               {"Signal Locator", "Estimate AP position via RSSI", UIIcon::Wifi, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<SignalTriangulationActivity>(r, m); }},
               {"Deauth Detector", "Monitor deauth frame spikes", UIIcon::Wifi, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<DeauthDetectorActivity>(r, m); }},
@@ -386,10 +399,14 @@ void AppsMenuActivity::loop() {
               {"* Ghost Mode", "MAC rotate + RF kill + cleanup", UIIcon::Settings, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<GhostActivity>(r, m); }},
               {"Emergency SOS", "SOS beacon + dead man switch", UIIcon::Hotspot, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<EmergencyActivity>(r, m); }},
               AppCategoryActivity::SectionHeader("DETECTION"),
+#if BISCUIT_HAS_BLE
               {"Tracker Detector", "Detect AirTags following you", UIIcon::Hotspot, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<TrackerDetectorActivity>(r, m); }},
               {"Security Sweep", "Scan for cameras/trackers/rogues", UIIcon::Settings, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<SweepActivity>(r, m); }},
+#endif
               {"Network Monitor", "Detect rogue APs + suspicious frames", UIIcon::Wifi, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<NetworkMonitorActivity>(r, m); }},
+#if BISCUIT_HAS_BLE
               {"Phone Tether", "BLE proximity disconnect alert", UIIcon::Hotspot, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<PhoneTetherActivity>(r, m); }},
+#endif
               AppCategoryActivity::SectionHeader("DEVICE SECURITY"),
               {"Quick Wipe", "Erase all biscuit data from SD", UIIcon::Folder, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<QuickWipeActivity>(r, m); }},
               {"Captured Data", "Review captured creds/handshakes/PCAPs", UIIcon::File, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<LootActivity>(r, m); }},
@@ -405,7 +422,9 @@ void AppsMenuActivity::loop() {
           std::vector<AppCategoryActivity::AppEntry> e = {
               {"Mesh Chat", "ESP-NOW text chat, no WiFi needed", UIIcon::Transfer, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<MeshChatActivity>(r, m); }},
               {"SSID Channel", "Hide messages in WiFi names", UIIcon::Wifi, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<SsidChannelActivity>(r, m); }},
+#if BISCUIT_HAS_BLE
               {"Contact Exchange", "Swap contact cards via BLE", UIIcon::Transfer, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<BleContactExchangeActivity>(r, m); }},
+#endif
               {"Dead Drop", "Anonymous file exchange AP", UIIcon::Hotspot, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<DeadDropActivity>(r, m); }},
               {"Bulletin Board", "Local anonymous message board", UIIcon::Hotspot, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<BulletinBoardActivity>(r, m); }},
           };
@@ -742,4 +761,3 @@ void AppsMenuActivity::drawTile(int index, int x, int y, int w, int h, bool sele
     }
   }
 }
-

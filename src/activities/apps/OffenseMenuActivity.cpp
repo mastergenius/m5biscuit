@@ -1,6 +1,7 @@
 #include "OffenseMenuActivity.h"
 
 #include <I18n.h>
+#include <HalBoard.h>
 #include <cstdio>
 
 #include "AppCategoryActivity.h"
@@ -11,8 +12,10 @@
 
 // --- Scan sub-tile activities ---
 #include "WifiScannerActivity.h"
+#if BISCUIT_HAS_BLE
 #include "BleScannerActivity.h"
 #include "ScanActivity.h"
+#endif
 #include "HuntActivity.h"
 
 // --- Profile sub-tile activities ---
@@ -22,11 +25,13 @@
 // --- Operations sub-tile activities ---
 #include "WifiTestActivity.h"
 #include "CaptivePortalActivity.h"
+#if BISCUIT_HAS_BLE
 #include "BleSpamActivity.h"
 #include "BleKeyboardActivity.h"
 #include "AirTagTestActivity.h"
-#include "ApClonerActivity.h"
 #include "FireActivity.h"
+#endif
+#include "ApClonerActivity.h"
 
 // --- Capture sub-tile activities ---
 #include "LootActivity.h"
@@ -134,10 +139,12 @@ void OffenseMenuActivity::openSubTile(int index) {
                 AppCategoryActivity::SectionHeader("SCANNING"),
                 {"WiFi Scan", "Discover APs + clients", UIIcon::Wifi,
                  [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<WifiScannerActivity>(r, m); }},
+#if BISCUIT_HAS_BLE
                 {"BLE Scan", "Discover BLE devices", UIIcon::Hotspot,
                  [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<BleScannerActivity>(r, m); }},
                 {"Full Sweep", "WiFi + BLE combined passive scan", UIIcon::Hotspot,
                  [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<ScanActivity>(r, m); }},
+#endif
                 AppCategoryActivity::SectionHeader("SAVED"),
                 {"Saved Targets", "Browse cached target database", UIIcon::Recent,
                  [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<HuntActivity>(r, m); }},
@@ -172,14 +179,15 @@ void OffenseMenuActivity::openSubTile(int index) {
                  [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<WifiTestActivity>(r, m); }},
                 {tr(STR_CAPTIVE_PORTAL), "Network portal for testing", UIIcon::Hotspot,
                  [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<CaptivePortalActivity>(r, m); }},
+                {"SSID Clone", "Clone a WiFi AP (open, same channel)", UIIcon::Wifi,
+                 [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<ApClonerActivity>(r, m); }},
+#if BISCUIT_HAS_BLE
                 {"Beacon Flood", "Broadcast 30 random SSIDs", UIIcon::Wifi,
                  [](GfxRenderer& r, MappedInputManager& m) -> std::unique_ptr<Activity> {
                      auto f = std::make_unique<FireActivity>(r, m);
                      f->setAttack(5);  // ATK_BEACON_FLOOD — universal, no target needed
                      return f;
                  }},
-                {"SSID Clone", "Clone a WiFi AP (open, same channel)", UIIcon::Wifi,
-                 [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<ApClonerActivity>(r, m); }},
                 AppCategoryActivity::SectionHeader("BLE"),
                 {"BLE Spam", "Proximity/Fast Pair/Swift Pair flood", UIIcon::Hotspot,
                  [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<BleSpamActivity>(r, m); }},
@@ -187,6 +195,7 @@ void OffenseMenuActivity::openSubTile(int index) {
                  [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<BleKeyboardActivity>(r, m); }},
                 {"AirTag Spoof", "Device location testing", UIIcon::Hotspot,
                  [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<AirTagTestActivity>(r, m); }},
+#endif
             };
             app = std::make_unique<AppCategoryActivity>(renderer, mappedInput, "Attack", std::move(e), true, -1);
             break;

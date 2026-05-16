@@ -1,6 +1,9 @@
 #include "RadioManager.h"
 
+#include <HalBoard.h>
+#if BISCUIT_HAS_BLE
 #include <BLEDevice.h>
+#endif
 #include <Logging.h>
 #include <Preferences.h>
 #include <WiFi.h>
@@ -19,6 +22,7 @@ bool RadioManager::ensureWifi() {
 }
 
 bool RadioManager::ensureBle() {
+#if BISCUIT_HAS_BLE
   if (state == RadioState::BLE) return true;
 
   if (state == RadioState::WIFI) {
@@ -29,6 +33,10 @@ bool RadioManager::ensureBle() {
   state = RadioState::BLE;
   LOG_DBG("RADIO", "Switched to BLE mode, heap: %d", ESP.getFreeHeap());
   return true;
+#else
+  LOG_ERR("RADIO", "BLE is not available on this build");
+  return false;
+#endif
 }
 
 void RadioManager::shutdown() {
@@ -45,9 +53,11 @@ void RadioManager::deinitWifi() {
 }
 
 void RadioManager::deinitBle() {
+#if BISCUIT_HAS_BLE
   BLEDevice::deinit(false);
   delay(50);
   LOG_DBG("RADIO", "BLE deinitialized");
+#endif
 }
 
 bool RadioManager::isDisclaimerAcknowledged() const {

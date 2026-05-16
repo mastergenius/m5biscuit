@@ -53,6 +53,7 @@ class ActivityManager {
   // Set by requestUpdateAndWait(); read and cleared by the render task after render completes.
   // Note: only one waiting task is supported at a time
   TaskHandle_t waitingTaskHandle = nullptr;
+  SemaphoreHandle_t waitingTaskMutex = nullptr;
 
   // Mutex to protect rendering operations from race conditions
   // Must only be used via RenderLock
@@ -64,7 +65,11 @@ class ActivityManager {
 
  public:
   explicit ActivityManager(GfxRenderer& renderer, MappedInputManager& mappedInput)
-      : renderer(renderer), mappedInput(mappedInput), renderingMutex(xSemaphoreCreateMutex()) {
+      : renderer(renderer),
+        mappedInput(mappedInput),
+        waitingTaskMutex(xSemaphoreCreateMutex()),
+        renderingMutex(xSemaphoreCreateMutex()) {
+    assert(waitingTaskMutex != nullptr && "Failed to create waiting task mutex");
     assert(renderingMutex != nullptr && "Failed to create rendering mutex");
     stackActivities.reserve(10);
   }

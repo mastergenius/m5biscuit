@@ -1,5 +1,8 @@
 #include "HuntActivity.h"
+#include <HalBoard.h>
+#if BISCUIT_HAS_BLE
 #include "FireActivity.h"
+#endif
 #include "activities/ActivityManager.h"
 
 #include <cstring>
@@ -122,42 +125,49 @@ void HuntActivity::analyzeCapabilities() {
             capabilities[capCount++] = {n, r, a, act, atkType};
         }
     };
+    auto addFire = [&add](const char* n, const char* r, bool a, int atkType) {
+#if BISCUIT_HAS_BLE
+        add(n, r, a, CAP_FIRE, atkType);
+#else
+        add(n, "Disabled on this board build", false, CAP_NONE, -1);
+#endif
+    };
 
     if (current->type == TargetType::AP) {
-        add("Handshake capture",
-            current->pmf ? "PMF enabled — may fail" : "No PMF — feasible",
-            !current->pmf, CAP_FIRE, 3);
-        add("PMKID harvest",
-            "Passive — no client needed",
-            current->authType >= 3, CAP_FIRE, 4);
-        add("Portal clone",
-            "Clone AP + serve portal page",
-            true, CAP_FIRE, 8);
-        add("Beacon flood",
-            "Flood nearby device WiFi lists",
-            true, CAP_FIRE, 5);
+        addFire("Handshake capture",
+                current->pmf ? "PMF enabled — may fail" : "No PMF — feasible",
+                !current->pmf, 3);
+        addFire("PMKID harvest",
+                "Passive — no client needed",
+                current->authType >= 3, 4);
+        addFire("Portal clone",
+                "Clone AP + serve portal page",
+                true, 8);
+        addFire("Beacon flood",
+                "Flood nearby device WiFi lists",
+                true, 5);
         if (current->wps) {
             add("WPS assessment",
                 "No automated tool available",
                 false, CAP_NONE, -1);
         }
     } else if (current->type == TargetType::STA) {
-        add("Probe response",
-            current->probeCount > 0 ? "Has probed SSIDs — feasible" : "No probes seen",
-            current->probeCount > 0, CAP_FIRE, 7);
+        addFire("Probe response",
+                current->probeCount > 0 ? "Has probed SSIDs — feasible" : "No probes seen",
+                current->probeCount > 0, 7);
         add("Track movement",
             "Monitor RSSI over time",
             true, CAP_TRACK, -1);
-        add("AP association spoof",
-            "Respond as known AP to client",
-            current->probeCount > 0, CAP_FIRE, 7);
+        addFire("AP association spoof",
+                "Respond as known AP to client",
+                current->probeCount > 0, 7);
     } else if (current->type == TargetType::BLE) {
-        add("Clone advertisement",
-            "Copy BLE broadcast data",
-            true, CAP_FIRE, 9);
-        add("Enumerate services",
-            "Connect and list GATT services",
-            true, CAP_FIRE, 11);
+        addFire("Clone advertisement",
+                "Copy BLE broadcast data",
+                true, 9);
+        addFire("Enumerate services",
+                "Connect and list GATT services",
+                true, 11);
         add("Track proximity",
             "Monitor RSSI distance",
             true, CAP_TRACK, -1);
@@ -362,12 +372,14 @@ void HuntActivity::loop() {
             if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
                 if (current && capIndex < capCount && capabilities[capIndex].available) {
                     const auto& cap = capabilities[capIndex];
+#if BISCUIT_HAS_BLE
                     if (cap.action == CAP_FIRE && cap.fireAttackType >= 0) {
                         auto fire = std::make_unique<FireActivity>(renderer, mappedInput);
                         fire->setTarget(current->mac);
                         fire->setAttack(cap.fireAttackType);
                         activityManager.pushActivity(std::move(fire));
                     }
+#endif
                     // CAP_TRACK: not implemented, ignore
                 }
             }
