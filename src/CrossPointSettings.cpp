@@ -294,6 +294,9 @@ int CrossPointSettings::getRefreshFrequency() const {
 }
 
 int CrossPointSettings::getReaderFontId() const {
+#ifdef OMIT_FONTS
+  return BOOKERLY_14_FONT_ID;
+#else
   switch (fontFamily) {
     case BOOKERLY:
     default:
@@ -333,4 +336,5 @@ int CrossPointSettings::getReaderFontId() const {
           return OPENDYSLEXIC_14_FONT_ID;
       }
   }
+#endif
 }

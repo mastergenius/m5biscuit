@@ -1,6 +1,6 @@
 """
 PlatformIO pre-build script: inject git branch into CROSSPOINT_VERSION for
-the default (dev) environment.
+development environments.
 
 Results in a version string like:  1.1.0-dev+feat-koysnc-xpath
 Release environments are unaffected; they set CROSSPOINT_VERSION in the ini.
@@ -55,15 +55,20 @@ def get_base_version(project_dir):
 
 
 def inject_version(env):
-    # Only applies to the dev (default) environment; release envs set the
-    # version via build_flags in platformio.ini and are unaffected.
-    if env['PIOENV'] != 'default':
+    # Only applies to development environments; release envs set the version
+    # via build_flags in platformio.ini and are unaffected.
+    env_name = env['PIOENV']
+    dev_suffixes = {
+        'default': 'dev',
+        'm5paper': 'm5paper',
+    }
+    if env_name not in dev_suffixes:
         return
 
     project_dir = env['PROJECT_DIR']
     base_version = get_base_version(project_dir)
     branch = get_git_branch(project_dir)
-    version_string = f'{base_version}-dev+{branch}'
+    version_string = f'{base_version}-{dev_suffixes[env_name]}+{branch}'
 
     env.Append(CPPDEFINES=[('CROSSPOINT_VERSION', f'\\"{version_string}\\"')])
     print(f'biscuit. build version: {version_string}')
