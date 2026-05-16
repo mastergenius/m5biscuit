@@ -3,18 +3,24 @@
 #include <string>
 
 #include "Arduino.h"
+#include "HalBoard.h"
 #include "HalStorage.h"
 #include "Logging.h"
+#include "esp_attr.h"
+
+#if !BISCUIT_BOARD_M5PAPER
 #include "esp_debug_helpers.h"
 #include "esp_private/esp_cpu_internal.h"
 #include "esp_private/esp_system_attr.h"
 #include "esp_private/panic_internal.h"
+#endif
 
 #define MAX_PANIC_STACK_DEPTH 32
 
 RTC_NOINIT_ATTR char panicMessage[256];
 RTC_NOINIT_ATTR HalSystem::StackFrame panicStack[MAX_PANIC_STACK_DEPTH];
 
+#if !BISCUIT_BOARD_M5PAPER
 extern "C" {
 
 void __real_panic_abort(const char* message);
@@ -67,6 +73,7 @@ void IRAM_ATTR __wrap_panic_print_backtrace(const void* frame, int core) {
   __real_panic_print_backtrace(frame, core);
 }
 }
+#endif
 
 namespace HalSystem {
 

@@ -1,10 +1,15 @@
 #pragma once
 
 #include <Arduino.h>
+#include "HalBoard.h"
+
+#if !BISCUIT_BOARD_M5PAPER
 #include <BatteryMonitor.h>
 #include <InputManager.h>
-#include <Logging.h>
 #include <Wire.h>
+#endif
+
+#include <Logging.h>
 #include <freertos/semphr.h>
 
 #include <cassert>

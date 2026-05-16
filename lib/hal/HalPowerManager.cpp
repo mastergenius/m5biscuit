@@ -8,9 +8,16 @@
 
 #include "HalGPIO.h"
 
+#if BISCUIT_BOARD_M5PAPER
+#include <M5Unified.h>
+#endif
+
 HalPowerManager powerManager;  // Singleton instance
 
 void HalPowerManager::begin() {
+#if BISCUIT_BOARD_M5PAPER
+  _batteryUseI2C = false;
+#else
   if (gpio.deviceIsX3()) {
     // X3 uses an I2C fuel gauge for battery monitoring.
     // I2C init must come AFTER gpio.begin() so early hardware detection/probes are finished.
@@ -20,6 +27,7 @@ void HalPowerManager::begin() {
   } else {
     pinMode(BAT_GPIO0, INPUT);
   }
+#endif
   normalFreq = getCpuFrequencyMhz();
   modeMutex = xSemaphoreCreateMutex();
   assert(modeMutex != nullptr);
@@ -61,6 +69,13 @@ void HalPowerManager::setPowerSaving(bool enabled) {
 }
 
 void HalPowerManager::startDeepSleep(HalGPIO& gpio) const {
+#if BISCUIT_BOARD_M5PAPER
+  while (gpio.isPressed(HalGPIO::BTN_POWER)) {
+    delay(50);
+    gpio.update();
+  }
+  M5.Power.deepSleep();
+#else
   // Ensure that the power button has been released to avoid immediately turning back on if you're holding it
   while (gpio.isPressed(HalGPIO::BTN_POWER)) {
     delay(50);
@@ -83,9 +98,18 @@ void HalPowerManager::startDeepSleep(HalGPIO& gpio) const {
   esp_deep_sleep_enable_gpio_wakeup(1ULL << InputManager::POWER_BUTTON_PIN, ESP_GPIO_WAKEUP_GPIO_LOW);
   // Enter Deep Sleep
   esp_deep_sleep_start();
+#endif
 }
 
 uint16_t HalPowerManager::getBatteryPercentage() const {
+#if BISCUIT_BOARD_M5PAPER
+  const int level = M5.Power.getBatteryLevel();
+  if (level >= 0 && level <= 100) {
+    _batteryCachedPercent = level;
+    return _batteryCachedPercent;
+  }
+  return _batteryCachedPercent;
+#else
   if (_batteryUseI2C) {
     const unsigned long now = millis();
     if (_batteryLastPollMs != 0 && (now - _batteryLastPollMs) < BATTERY_POLL_MS) {
@@ -115,6 +139,7 @@ uint16_t HalPowerManager::getBatteryPercentage() const {
   static const BatteryMonitor battery = BatteryMonitor(BAT_GPIO0);
   _batteryCachedPercent = battery.readPercentage();
   return _batteryCachedPercent;
+#endif
 }
 
 HalPowerManager::Lock::Lock() {

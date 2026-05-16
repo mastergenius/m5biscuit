@@ -1,8 +1,25 @@
 #pragma once
 
 #include <Arduino.h>
-#include <InputManager.h>
 
+#include "HalBoard.h"
+
+#if !BISCUIT_BOARD_M5PAPER
+#include <InputManager.h>
+#endif
+
+#if BISCUIT_BOARD_M5PAPER
+// M5Paper V1.1 shared SPI bus: IT8951 e-paper + TF card.
+#define M5PAPER_SPI_MISO 13
+#define M5PAPER_SPI_MOSI 12
+#define M5PAPER_SPI_SCLK 14
+#define M5PAPER_EPD_CS 15
+#define M5PAPER_SD_CS 4
+
+#define M5PAPER_BTN_RIGHT 37
+#define M5PAPER_BTN_PUSH 38
+#define M5PAPER_BTN_LEFT 39
+#else
 // Display SPI pins (custom pins for XteinkX4, not hardware SPI defaults)
 #define EPD_SCLK 8   // SPI Clock
 #define EPD_MOSI 10  // SPI MOSI (Master Out Slave In)
@@ -37,20 +54,33 @@
 #define I2C_ADDR_QMI8658_ALT 0x6A    // IMU I2C fallback address
 #define QMI8658_WHO_AM_I_REG 0x00    // WHO_AM_I command code
 #define QMI8658_WHO_AM_I_VALUE 0x05  // WHO_AM_I expected value
+#endif
 
 class HalGPIO {
-#if CROSSPOINT_EMULATED == 0
+#if !BISCUIT_BOARD_M5PAPER && CROSSPOINT_EMULATED == 0
   InputManager inputMgr;
 #endif
 
   bool lastUsbConnected = false;
   bool usbStateChanged = false;
 
+#if BISCUIT_BOARD_M5PAPER
+  bool buttonState[7] = {};
+  bool pressedEdge[7] = {};
+  bool releasedEdge[7] = {};
+  unsigned long heldStartMs = 0;
+  unsigned long heldTimeMs = 0;
+#endif
+
  public:
-  enum class DeviceType : uint8_t { X4, X3 };
+  enum class DeviceType : uint8_t { X4, X3, M5Paper };
 
  private:
+#if BISCUIT_BOARD_M5PAPER
+  DeviceType _deviceType = DeviceType::M5Paper;
+#else
   DeviceType _deviceType = DeviceType::X4;
+#endif
 
  public:
   HalGPIO() = default;
@@ -58,6 +88,7 @@ class HalGPIO {
   // Inline device type helpers for cleaner downstream checks
   inline bool deviceIsX3() const { return _deviceType == DeviceType::X3; }
   inline bool deviceIsX4() const { return _deviceType == DeviceType::X4; }
+  inline bool deviceIsM5Paper() const { return _deviceType == DeviceType::M5Paper; }
 
   // Start button GPIO and setup SPI for screen and SD card
   void begin();

@@ -1,6 +1,13 @@
 #pragma once
 #include <Arduino.h>
+
+#include "HalBoard.h"
+
+#if BISCUIT_BOARD_M5PAPER
+#include <cstdint>
+#else
 #include <EInkDisplay.h>
+#endif
 
 class HalDisplay {
  public:
@@ -21,8 +28,13 @@ class HalDisplay {
   void begin();
 
   // Display dimensions
+#if BISCUIT_BOARD_M5PAPER
+  static constexpr uint16_t DISPLAY_WIDTH = BISCUIT_DISPLAY_WIDTH;
+  static constexpr uint16_t DISPLAY_HEIGHT = BISCUIT_DISPLAY_HEIGHT;
+#else
   static constexpr uint16_t DISPLAY_WIDTH = EInkDisplay::DISPLAY_WIDTH;
   static constexpr uint16_t DISPLAY_HEIGHT = EInkDisplay::DISPLAY_HEIGHT;
+#endif
   static constexpr uint16_t DISPLAY_WIDTH_BYTES = DISPLAY_WIDTH / 8;
   static constexpr uint32_t BUFFER_SIZE = DISPLAY_WIDTH_BYTES * DISPLAY_HEIGHT;
 
@@ -56,7 +68,14 @@ class HalDisplay {
   uint32_t getBufferSize() const;
 
  private:
+#if BISCUIT_BOARD_M5PAPER
+  uint8_t* frameBuffer = nullptr;
+  uint8_t* grayscaleLsbBuffer = nullptr;
+  uint8_t* grayscaleMsbBuffer = nullptr;
+  uint16_t* nativeFrameBuffer = nullptr;
+#else
   EInkDisplay einkDisplay;
+#endif
 };
 
 extern HalDisplay display;

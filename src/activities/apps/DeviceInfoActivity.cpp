@@ -1,6 +1,8 @@
 #include "DeviceInfoActivity.h"
 
 #include <GfxRenderer.h>
+#include <HalBoard.h>
+#include <HalDisplay.h>
 #include <HalStorage.h>
 #include <WiFi.h>
 #include <esp_system.h>
@@ -95,11 +97,12 @@ void DeviceInfoActivity::render(RenderLock&&) {
     }
   }
 
-  // 7: Screen
-  snprintf(lines[n++], 80, "Screen:    800x480 e-ink");
+  // 7: Board
+  snprintf(lines[n++], 80, "Board:     %s", BiscuitBoard::boardName());
 
-  // 8: Display controller
-  snprintf(lines[n++], 80, "Display:   SSD1677");
+  // 8: Screen
+  snprintf(lines[n++], 80, "Screen:    %ux%u e-ink", (unsigned)HalDisplay::DISPLAY_WIDTH,
+           (unsigned)HalDisplay::DISPLAY_HEIGHT);
 
   // Clamp scroll
   int maxScroll = LINE_COUNT - visibleLines;

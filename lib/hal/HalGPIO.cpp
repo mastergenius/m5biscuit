@@ -8,6 +8,117 @@
 // Global HalGPIO instance
 HalGPIO gpio;
 
+#if BISCUIT_BOARD_M5PAPER
+
+#include <M5Unified.h>
+
+namespace {
+bool readActiveLowButton(uint8_t pin) { return digitalRead(pin) == LOW; }
+}  // namespace
+
+void HalGPIO::begin() {
+  auto cfg = M5.config();
+  cfg.serial_baudrate = 0;
+  cfg.clear_display = false;
+  cfg.output_power = true;
+  M5.begin(cfg);
+
+  _deviceType = DeviceType::M5Paper;
+  pinMode(M5PAPER_BTN_LEFT, INPUT);
+  pinMode(M5PAPER_BTN_PUSH, INPUT);
+  pinMode(M5PAPER_BTN_RIGHT, INPUT);
+  SPI.begin(M5PAPER_SPI_SCLK, M5PAPER_SPI_MISO, M5PAPER_SPI_MOSI, M5PAPER_EPD_CS);
+  update();
+  lastUsbConnected = isUsbConnected();
+  usbStateChanged = false;
+}
+
+void HalGPIO::update() {
+  M5.update();
+
+  bool nextState[7] = {};
+  const bool left = readActiveLowButton(M5PAPER_BTN_LEFT);
+  const bool push = readActiveLowButton(M5PAPER_BTN_PUSH);
+  const bool right = readActiveLowButton(M5PAPER_BTN_RIGHT);
+
+  nextState[BTN_BACK] = left;
+  nextState[BTN_LEFT] = left;
+  nextState[BTN_CONFIRM] = push;
+  nextState[BTN_POWER] = push;
+  nextState[BTN_RIGHT] = right;
+
+  bool anyPressed = false;
+  for (uint8_t i = 0; i < 7; ++i) {
+    pressedEdge[i] = nextState[i] && !buttonState[i];
+    releasedEdge[i] = !nextState[i] && buttonState[i];
+    buttonState[i] = nextState[i];
+    anyPressed = anyPressed || nextState[i];
+  }
+
+  if (wasAnyPressed()) {
+    heldStartMs = millis();
+  }
+  heldTimeMs = anyPressed ? (millis() - heldStartMs) : 0;
+
+  const bool connected = isUsbConnected();
+  usbStateChanged = (connected != lastUsbConnected);
+  lastUsbConnected = connected;
+}
+
+bool HalGPIO::wasUsbStateChanged() const { return usbStateChanged; }
+
+bool HalGPIO::isPressed(uint8_t buttonIndex) const { return buttonIndex < 7 && buttonState[buttonIndex]; }
+
+bool HalGPIO::wasPressed(uint8_t buttonIndex) const { return buttonIndex < 7 && pressedEdge[buttonIndex]; }
+
+bool HalGPIO::wasAnyPressed() const {
+  for (bool edge : pressedEdge) {
+    if (edge) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool HalGPIO::wasReleased(uint8_t buttonIndex) const { return buttonIndex < 7 && releasedEdge[buttonIndex]; }
+
+bool HalGPIO::wasAnyReleased() const {
+  for (bool edge : releasedEdge) {
+    if (edge) {
+      return true;
+    }
+  }
+  return false;
+}
+
+unsigned long HalGPIO::getHeldTime() const { return heldTimeMs; }
+
+void HalGPIO::startDeepSleep() {
+  while (isPressed(BTN_POWER)) {
+    delay(50);
+    update();
+  }
+  M5.Power.deepSleep();
+}
+
+void HalGPIO::verifyPowerButtonWakeup(uint16_t requiredDurationMs, bool shortPressAllowed) {
+  (void)requiredDurationMs;
+  (void)shortPressAllowed;
+}
+
+bool HalGPIO::isUsbConnected() const { return M5.Power.isCharging() == m5::Power_Class::is_charging; }
+
+HalGPIO::WakeupReason HalGPIO::getWakeupReason() const {
+  const auto wakeupCause = esp_sleep_get_wakeup_cause();
+  const auto resetReason = esp_reset_reason();
+  if (wakeupCause == ESP_SLEEP_WAKEUP_UNDEFINED && resetReason == ESP_RST_UNKNOWN && isUsbConnected()) {
+    return WakeupReason::AfterFlash;
+  }
+  return WakeupReason::Other;
+}
+
+#else
+
 namespace X3GPIO {
 
 struct X3ProbeResult {
@@ -302,3 +413,5 @@ HalGPIO::WakeupReason HalGPIO::getWakeupReason() const {
   }
   return WakeupReason::Other;
 }
+
+#endif
