@@ -7,7 +7,9 @@ This document describes all HTTP and WebSocket endpoints available on the Biscui
   - [HTTP Endpoints](#http-endpoints)
     - [GET `/` - Home Page](#get----home-page)
     - [GET `/files` - File Browser Page](#get-files---file-browser-page)
+    - [GET `/api/device` - Device Identity](#get-apidevice---device-identity)
     - [GET `/api/status` - Device Status](#get-apistatus---device-status)
+    - [GET `/api/events` - Event Snapshot](#get-apievents---event-snapshot)
     - [GET `/api/files` - List Files](#get-apifiles---list-files)
     - [POST `/upload` - Upload File](#post-upload---upload-file)
     - [POST `/mkdir` - Create Folder](#post-mkdir---create-folder)
@@ -57,6 +59,57 @@ curl http://biscuit.local/files
 
 ---
 
+### GET `/api/device` - Device Identity
+
+Returns stable Biscuit Link v0 identity, hardware, capability, and endpoint metadata.
+
+**Request:**
+```bash
+curl http://biscuit.local/api/device
+```
+
+**Response (200 OK):**
+```json
+{
+  "v": 0,
+  "device_id": "m5paper-5c013b0db9b0",
+  "device_type": "m5paper",
+  "name": "M5Paper",
+  "firmware": "0.1.0-m5paper+master",
+  "board": "M5Paper",
+  "chip": {
+    "model": "ESP32-D0WDQ6-V3",
+    "revision": 3,
+    "cpuMHz": 240,
+    "flashBytes": 16777216
+  },
+  "display": {
+    "width": 960,
+    "height": 540,
+    "bufferBytes": 64800,
+    "color": "monochrome"
+  },
+  "capabilities": ["reader", "sd", "wifi", "web_transfer", "biscuit_link_v0"],
+  "endpoints": {
+    "status": "/api/status",
+    "events": "/api/events",
+    "files": "/api/files",
+    "wifi": "/api/wifi",
+    "settings": "/api/settings"
+  },
+  "transport": {
+    "httpPort": 80,
+    "wsPort": 81,
+    "udpDiscoveryPort": 8134
+  }
+}
+```
+
+`device_id` is derived from the board type and WiFi MAC address, and is intended to be stable enough
+for local discovery and controller pairing.
+
+---
+
 ### GET `/api/status` - Device Status
 
 Returns JSON with device status information.
@@ -69,23 +122,76 @@ curl http://biscuit.local/api/status
 **Response (200 OK):**
 ```json
 {
+  "v": 0,
+  "device_id": "m5paper-5c013b0db9b0",
+  "device_type": "m5paper",
   "version": "1.0.0",
   "ip": "192.168.1.100",
   "mode": "STA",
   "rssi": -45,
   "freeHeap": 123456,
-  "uptime": 3600
+  "uptime": 3600,
+  "ssid": "HomeWiFi",
+  "heap": {
+    "free": 123456,
+    "total": 281944,
+    "minFree": 110000,
+    "maxAlloc": 90000
+  },
+  "display": {
+    "width": 960,
+    "height": 540,
+    "bufferBytes": 64800,
+    "color": "monochrome"
+  },
+  "upload": {
+    "inProgress": false,
+    "received": 0,
+    "total": 0,
+    "filename": "",
+    "lastCompleteName": "book.epub",
+    "lastCompleteSize": 123456,
+    "lastCompleteAt": 1234567
+  }
 }
 ```
 
-| Field      | Type   | Description                                               |
-| ---------- | ------ | --------------------------------------------------------- |
-| `version`  | string | Biscuit firmware version                               |
-| `ip`       | string | Device IP address                                         |
-| `mode`     | string | `"STA"` (connected to WiFi) or `"AP"` (access point mode) |
-| `rssi`     | number | WiFi signal strength in dBm (0 in AP mode)                |
-| `freeHeap` | number | Free heap memory in bytes                                 |
-| `uptime`   | number | Seconds since device boot                                 |
+The original flat fields (`version`, `ip`, `mode`, `rssi`, `freeHeap`, `uptime`) remain for
+backward compatibility. New code should prefer the explicit `device_id`, `device_type`, `heap`,
+`display`, and `upload` objects.
+
+---
+
+### GET `/api/events` - Event Snapshot
+
+Returns a lightweight Biscuit Link v0 event snapshot. This is not a streaming endpoint yet; it is a
+pollable envelope that can later map to WebSocket, ESP-NOW, or a local hub.
+
+**Request:**
+```bash
+curl http://biscuit.local/api/events
+```
+
+**Response (200 OK):**
+```json
+{
+  "v": 0,
+  "device_id": "m5paper-5c013b0db9b0",
+  "snapshot": true,
+  "events": [
+    {
+      "type": "status",
+      "ts": 1234567,
+      "body": {
+        "uptime": 3600,
+        "ip": "192.168.1.100",
+        "mode": "STA",
+        "freeHeap": 123456
+      }
+    }
+  ]
+}
+```
 
 ---
 

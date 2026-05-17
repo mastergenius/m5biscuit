@@ -3,6 +3,8 @@
 #include <ArduinoJson.h>
 #include <Epub.h>
 #include <FsHelpers.h>
+#include <HalBoard.h>
+#include <HalDisplay.h>
 #include <HalStorage.h>
 #include <Logging.h>
 #include <WiFi.h>
@@ -83,6 +85,74 @@ bool isProtectedItemName(const String& name) {
   }
   return false;
 }
+
+String deviceType() {
+#if BISCUIT_BOARD_M5PAPER
+  return "m5paper";
+#else
+  return "xteink";
+#endif
+}
+
+String deviceId() {
+  String mac = WiFi.macAddress();
+  mac.replace(":", "");
+  mac.toLowerCase();
+  if (mac.isEmpty() || mac == "000000000000") {
+    mac = "unknown";
+  }
+  return deviceType() + "-" + mac;
+}
+
+String currentIpAddress(const bool apMode) { return apMode ? WiFi.softAPIP().toString() : WiFi.localIP().toString(); }
+
+void addCapabilities(JsonArray capabilities) {
+  capabilities.add("reader");
+  capabilities.add("sd");
+  capabilities.add("wifi");
+  capabilities.add("web_transfer");
+  capabilities.add("biscuit_link_v0");
+
+  if (BiscuitBoard::hasTouch()) {
+    capabilities.add("touch");
+  }
+  if (BiscuitBoard::hasPsram()) {
+    capabilities.add("psram");
+  }
+  if (BiscuitBoard::hasNativeUsb()) {
+    capabilities.add("native_usb");
+  }
+  if (BiscuitBoard::hasBle()) {
+    capabilities.add("ble");
+  }
+#if BISCUIT_BOARD_M5PAPER
+  capabilities.add("eink_mono");
+  capabilities.add("deep_sleep_wake");
+#endif
+}
+
+void addHeapInfo(JsonObject heap) {
+  heap["free"] = ESP.getFreeHeap();
+  heap["total"] = ESP.getHeapSize();
+  heap["minFree"] = ESP.getMinFreeHeap();
+  heap["maxAlloc"] = ESP.getMaxAllocHeap();
+#if BISCUIT_HAS_PSRAM
+  JsonObject psram = heap["psram"].to<JsonObject>();
+  psram["free"] = ESP.getFreePsram();
+  psram["total"] = ESP.getPsramSize();
+#endif
+}
+
+void addDisplayInfo(JsonObject display) {
+  display["width"] = HalDisplay::DISPLAY_WIDTH;
+  display["height"] = HalDisplay::DISPLAY_HEIGHT;
+  display["bufferBytes"] = HalDisplay::BUFFER_SIZE;
+#if BISCUIT_BOARD_M5PAPER
+  display["color"] = "monochrome";
+#else
+  display["color"] = "grayscale";
+#endif
+}
 }  // namespace
 
 // File listing page template - now using generated headers:
@@ -139,7 +209,9 @@ void CrossPointWebServer::begin() {
   server->on("/wifi", HTTP_GET, [this] { handleWifiSetupPage(); });
   server->on("/js/jszip.min.js", HTTP_GET, [this] { handleJszip(); });
 
+  server->on("/api/device", HTTP_GET, [this] { handleDevice(); });
   server->on("/api/status", HTTP_GET, [this] { handleStatus(); });
+  server->on("/api/events", HTTP_GET, [this] { handleEvents(); });
   server->on("/api/wifi", HTTP_GET, [this] { handleGetWifiCredentials(); });
   server->on("/api/wifi", HTTP_POST, [this] { handlePostWifiCredentials(); });
   server->on("/api/files", HTTP_GET, [this] { handleFileListData(); });
@@ -344,17 +416,100 @@ void CrossPointWebServer::handleNotFound() const {
   server->send(404, "text/plain", message);
 }
 
+void CrossPointWebServer::handleDevice() const {
+  JsonDocument doc;
+  doc["v"] = 0;
+  doc["device_id"] = deviceId();
+  doc["device_type"] = deviceType();
+  doc["name"] = BiscuitBoard::boardName();
+  doc["firmware"] = CROSSPOINT_VERSION;
+  doc["board"] = BiscuitBoard::boardName();
+
+  JsonObject chip = doc["chip"].to<JsonObject>();
+  chip["model"] = ESP.getChipModel();
+  chip["revision"] = ESP.getChipRevision();
+  chip["cpuMHz"] = ESP.getCpuFreqMHz();
+  chip["flashBytes"] = ESP.getFlashChipSize();
+
+  addDisplayInfo(doc["display"].to<JsonObject>());
+  addCapabilities(doc["capabilities"].to<JsonArray>());
+
+  JsonObject endpoints = doc["endpoints"].to<JsonObject>();
+  endpoints["status"] = "/api/status";
+  endpoints["events"] = "/api/events";
+  endpoints["files"] = "/api/files";
+  endpoints["wifi"] = "/api/wifi";
+  endpoints["settings"] = "/api/settings";
+
+  JsonObject transport = doc["transport"].to<JsonObject>();
+  transport["httpPort"] = port;
+  transport["wsPort"] = wsPort;
+  transport["udpDiscoveryPort"] = LOCAL_UDP_PORT;
+
+  String json;
+  serializeJson(doc, json);
+  server->send(200, "application/json", json);
+}
+
 void CrossPointWebServer::handleStatus() const {
   // Get correct IP based on AP vs STA mode
-  const String ipAddr = apMode ? WiFi.softAPIP().toString() : WiFi.localIP().toString();
+  const String ipAddr = currentIpAddress(apMode);
 
   JsonDocument doc;
+  doc["v"] = 0;
+  doc["device_id"] = deviceId();
+  doc["device_type"] = deviceType();
   doc["version"] = CROSSPOINT_VERSION;
   doc["ip"] = ipAddr;
   doc["mode"] = apMode ? "AP" : "STA";
   doc["rssi"] = apMode ? 0 : WiFi.RSSI();
   doc["freeHeap"] = ESP.getFreeHeap();
   doc["uptime"] = millis() / 1000;
+  doc["ssid"] = apMode ? WiFi.softAPSSID() : WiFi.SSID();
+
+  addHeapInfo(doc["heap"].to<JsonObject>());
+  addDisplayInfo(doc["display"].to<JsonObject>());
+
+  JsonObject upload = doc["upload"].to<JsonObject>();
+  upload["inProgress"] = wsUploadInProgress;
+  upload["received"] = wsUploadReceived;
+  upload["total"] = wsUploadSize;
+  upload["filename"] = wsUploadFileName;
+  upload["lastCompleteName"] = wsLastCompleteName;
+  upload["lastCompleteSize"] = wsLastCompleteSize;
+  upload["lastCompleteAt"] = wsLastCompleteAt;
+
+  String json;
+  serializeJson(doc, json);
+  server->send(200, "application/json", json);
+}
+
+void CrossPointWebServer::handleEvents() const {
+  JsonDocument doc;
+  doc["v"] = 0;
+  doc["device_id"] = deviceId();
+  doc["snapshot"] = true;
+
+  JsonArray events = doc["events"].to<JsonArray>();
+  JsonObject status = events.add<JsonObject>();
+  status["type"] = "status";
+  status["ts"] = millis();
+  JsonObject statusBody = status["body"].to<JsonObject>();
+  statusBody["uptime"] = millis() / 1000;
+  statusBody["ip"] = currentIpAddress(apMode);
+  statusBody["mode"] = apMode ? "AP" : "STA";
+  statusBody["freeHeap"] = ESP.getFreeHeap();
+
+  if (wsUploadInProgress || !wsLastCompleteName.isEmpty()) {
+    JsonObject upload = events.add<JsonObject>();
+    upload["type"] = wsUploadInProgress ? "upload_progress" : "upload_complete";
+    upload["ts"] = wsUploadInProgress ? millis() : wsLastCompleteAt;
+    JsonObject uploadBody = upload["body"].to<JsonObject>();
+    uploadBody["filename"] = wsUploadInProgress ? wsUploadFileName : wsLastCompleteName;
+    uploadBody["received"] = wsUploadReceived;
+    uploadBody["total"] = wsUploadSize;
+    uploadBody["lastCompleteSize"] = wsLastCompleteSize;
+  }
 
   String json;
   serializeJson(doc, json);
