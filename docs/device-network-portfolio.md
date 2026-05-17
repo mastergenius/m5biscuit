@@ -207,15 +207,18 @@ Updated priority after the first Biscuit Link endpoint work:
    - saved-WiFi sync as the normal path;
    - WPA2 hotspot as bootstrap or fallback only;
    - hotspot QR may include WiFi credentials, but HTTP access still requires the session token.
-2. Pivot the first product use case toward an offline-first M5Paper study device:
-   - Mac prepares and syncs study packs;
-   - M5Paper stores decks locally and can run reviews offline;
+2. Pivot the first product use case toward an offline-first adaptive study system:
+   - repo-committed Mac digital twin agent generates and evolves StudyPacks;
+   - Mac app and M5Paper are runtime clients over the same StudyPack/ReviewEvent contracts;
+   - M5Paper stores StudyPacks locally and can run learning episodes offline;
    - M5Paper writes rotated review log segments;
-   - Mac later imports review logs and sends acknowledgements.
+   - Mac digital twin later imports review logs, updates the learner/concept model, and sends
+     acknowledgements.
 3. Keep ESP-NOW and broader device fabric as follow-on experiments after the secure sync and study
    data model are usable.
 
 See also: [Offline-First Study Sync](study-sync-offline-first.md).
+See also: [Study Twin Agent Workspace](../agents/study-twin/README.md).
 
 Do not pursue now:
 
@@ -261,7 +264,8 @@ Example envelope, intentionally transport-neutral:
 
 - Which devices are ESP32-class and can run ESP-NOW directly?
 - What exact board is the joystick controller shipped with Stackchan?
-- Should the Mac hub be a small CLI/daemon first, or a web dashboard first?
+- Should the Mac study helper stay CLI-first until StudyPack v0 is stable, or should a local GUI be
+  introduced earlier for faster iteration?
 - Which Apple Home concepts are actually worth exposing: presence, alerts, reader status, buttons,
   lights, scenes, or sensors?
 - Do we need encrypted device-to-device control from the start, or is local trusted LAN acceptable
@@ -270,8 +274,9 @@ Example envelope, intentionally transport-neutral:
 ## Next Actions
 
 1. Keep committing each M5Paper known-good stabilization point after hardware smoke testing.
-2. Add the StudyPack v0 deck schema and validation helpers.
-3. Add study sync endpoints for deck listing/upload and rotated review-log download/ack.
+2. Add the StudyPack v0 episode schema and validation helpers.
+3. Add study sync endpoints for StudyPack listing/upload and rotated review-log download/ack.
 4. Add a manual protocol smoke test using a browser or `curl` against M5Paper.
-5. Create a separate ESP-NOW lab target or sample app outside the stable M5Paper reader path.
-6. Revisit BLE after the scan-only memory/radio probe is measured.
+5. Add a CLI-first Mac study helper in the repo-committed digital twin workspace.
+6. Create a separate ESP-NOW lab target or sample app outside the stable M5Paper reader path.
+7. Revisit BLE after the scan-only memory/radio probe is measured.
