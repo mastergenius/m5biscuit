@@ -68,6 +68,22 @@ agents/study-twin/
 The first implementation should be CLI-first. A GUI can sit on top after the pack/log contracts are
 stable enough to test on both Mac and M5Paper.
 
+## Current v0 Contract Files
+
+- `schemas/study-pack-v0.schema.json` - public StudyPack contract for manifests, concepts,
+  episodes, and rubrics.
+- `schemas/review-event-v0.schema.json` - public ReviewEvent contract emitted by runtimes.
+- `examples/packs/fr-a1-mini/` - minimal French A1 fixture pack.
+- `examples/review-logs/reviews_000001.jsonl` - minimal ReviewEvent fixture.
+- `tools/validate-pack` - local standard-library validator for pack structure, cross-file links,
+  counts, action/rubric references, and M5Paper-oriented text/size budgets.
+
+Validate the fixture pack:
+
+```bash
+python3 agents/study-twin/tools/validate-pack agents/study-twin/examples/packs/fr-a1-mini
+```
+
 ## Data Policy
 
 This repository may contain agent instructions, schemas, test fixtures, examples, and intentional

@@ -1,0 +1,39 @@
+{
+  "schema": "biscuit.study-pack.v0",
+  "pack_id": "fr-a1-mini",
+  "title": "French A1 Mini: Greetings And Gender",
+  "description": "Tiny fixture pack for testing StudyPack v0 on M5Paper and Mac runtimes.",
+  "revision": "2026-05-17.1",
+  "language": "fr",
+  "entry_episode_id": "fr-a1-mini-brief-001",
+  "generator": {
+    "id": "study-twin-seed",
+    "version": "0.0.1",
+    "policy": "manual-fixture"
+  },
+  "files": {
+    "concepts": "concepts.jsonl",
+    "episodes": "episodes.jsonl",
+    "rubrics": "rubrics.jsonl",
+    "assets_dir": "assets"
+  },
+  "counts": {
+    "concepts": 5,
+    "episodes": 5,
+    "rubrics": 3
+  },
+  "constraints": {
+    "max_pack_bytes": 524288,
+    "max_prompt_chars": 900,
+    "max_reveal_chars": 1200,
+    "max_rubric_chars": 1200
+  },
+  "runtime_targets": ["m5paper", "mac"],
+  "sources": [
+    {
+      "id": "manual-fr-a1-seed",
+      "type": "manual",
+      "title": "Handwritten French A1 seed examples"
+    }
+  ]
+}

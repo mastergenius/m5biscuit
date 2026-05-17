@@ -274,9 +274,11 @@ Example envelope, intentionally transport-neutral:
 ## Next Actions
 
 1. Keep committing each M5Paper known-good stabilization point after hardware smoke testing.
-2. Add the StudyPack v0 episode schema and validation helpers.
-3. Add study sync endpoints for StudyPack listing/upload and rotated review-log download/ack.
-4. Add a manual protocol smoke test using a browser or `curl` against M5Paper.
-5. Add a CLI-first Mac study helper in the repo-committed digital twin workspace.
-6. Create a separate ESP-NOW lab target or sample app outside the stable M5Paper reader path.
-7. Revisit BLE after the scan-only memory/radio probe is measured.
+2. Build a small firmware-side StudyPack reader that can stream `manifest.json`, `concepts.jsonl`,
+   `episodes.jsonl`, and `rubrics.jsonl` without large heap spikes.
+3. Add a minimal M5Paper `StudyActivity` for `brief`, `retrieve`, `reveal`, and self-rating.
+4. Add study sync endpoints for StudyPack listing/upload and rotated review-log download/ack.
+5. Add a manual protocol smoke test using a browser or `curl` against M5Paper.
+6. Add a CLI-first Mac study helper in the repo-committed digital twin workspace.
+7. Create a separate ESP-NOW lab target or sample app outside the stable M5Paper reader path.
+8. Revisit BLE after the scan-only memory/radio probe is measured.

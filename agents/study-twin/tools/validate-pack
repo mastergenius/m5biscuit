@@ -1,0 +1,369 @@
+#!/usr/bin/env python3
+"""Validate a Biscuit StudyPack v0 directory.
+
+This intentionally uses only the Python standard library. The JSON Schema files
+in ../schemas are the public contract; this tool enforces the practical subset
+and cross-file invariants that matter before a pack is sent to M5Paper.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+from typing import Any
+
+
+ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{1,95}$")
+KNOWN_EPISODE_TYPES = {
+    "brief",
+    "retrieve",
+    "predict",
+    "explain",
+    "contrast",
+    "apply",
+    "map_walk",
+    "diagnostic",
+    "reflection",
+}
+KNOWN_ACTIONS = {
+    "shown",
+    "revealed",
+    "answered",
+    "again",
+    "hard",
+    "good",
+    "easy",
+    "confused",
+    "skipped",
+}
+DEFAULT_LIMITS = {
+    "max_pack_bytes": 512 * 1024,
+    "max_prompt_chars": 900,
+    "max_reveal_chars": 1200,
+    "max_rubric_chars": 1200,
+}
+
+
+class ValidationError(Exception):
+    pass
+
+
+class Validator:
+    def __init__(self) -> None:
+        self.errors: list[str] = []
+        self.warnings: list[str] = []
+
+    def error(self, message: str) -> None:
+        self.errors.append(message)
+
+    def warn(self, message: str) -> None:
+        self.warnings.append(message)
+
+    def require(self, condition: bool, message: str) -> None:
+        if not condition:
+            self.error(message)
+
+    def validate_id(self, value: Any, label: str) -> None:
+        self.require(isinstance(value, str) and bool(ID_RE.match(value)), f"{label} must be a stable id")
+
+
+def read_json(path: Path, validator: Validator) -> dict[str, Any]:
+    try:
+        with path.open("r", encoding="utf-8") as fh:
+            value = json.load(fh)
+    except FileNotFoundError:
+        validator.error(f"missing file: {path}")
+        return {}
+    except json.JSONDecodeError as exc:
+        validator.error(f"{path}:{exc.lineno}:{exc.colno}: invalid JSON: {exc.msg}")
+        return {}
+
+    if not isinstance(value, dict):
+        validator.error(f"{path}: expected a JSON object")
+        return {}
+    return value
+
+
+def read_jsonl(path: Path, validator: Validator) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    try:
+        with path.open("r", encoding="utf-8") as fh:
+            for line_no, line in enumerate(fh, start=1):
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                try:
+                    value = json.loads(stripped)
+                except json.JSONDecodeError as exc:
+                    validator.error(f"{path}:{line_no}:{exc.colno}: invalid JSONL record: {exc.msg}")
+                    continue
+                if not isinstance(value, dict):
+                    validator.error(f"{path}:{line_no}: expected a JSON object")
+                    continue
+                records.append(value)
+    except FileNotFoundError:
+        validator.error(f"missing file: {path}")
+    return records
+
+
+def text_len(value: Any) -> int:
+    return len(value) if isinstance(value, str) else 0
+
+
+def collect_by_id(records: list[dict[str, Any]], label: str, validator: Validator) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for index, record in enumerate(records, start=1):
+        record_id = record.get("id")
+        validator.validate_id(record_id, f"{label}[{index}].id")
+        if isinstance(record_id, str):
+            if record_id in out:
+                validator.error(f"duplicate {label} id: {record_id}")
+            out[record_id] = record
+    return out
+
+
+def pack_size_bytes(pack_dir: Path) -> int:
+    total = 0
+    for path in pack_dir.rglob("*"):
+        if path.is_file():
+            total += path.stat().st_size
+    return total
+
+
+def validate_manifest(manifest: dict[str, Any], validator: Validator) -> dict[str, int]:
+    validator.require(manifest.get("schema") == "biscuit.study-pack.v0", "manifest.schema must be biscuit.study-pack.v0")
+    validator.validate_id(manifest.get("pack_id"), "manifest.pack_id")
+    validator.validate_id(manifest.get("entry_episode_id"), "manifest.entry_episode_id")
+    validator.require(isinstance(manifest.get("title"), str) and bool(manifest.get("title")), "manifest.title is required")
+    validator.require(isinstance(manifest.get("revision"), str) and bool(manifest.get("revision")), "manifest.revision is required")
+
+    generator = manifest.get("generator")
+    validator.require(isinstance(generator, dict), "manifest.generator is required")
+    if isinstance(generator, dict):
+        validator.validate_id(generator.get("id"), "manifest.generator.id")
+        validator.require(isinstance(generator.get("version"), str) and bool(generator.get("version")),
+                          "manifest.generator.version is required")
+
+    files = manifest.get("files")
+    validator.require(isinstance(files, dict), "manifest.files is required")
+    if isinstance(files, dict):
+        validator.require(files.get("concepts") == "concepts.jsonl", "manifest.files.concepts must be concepts.jsonl")
+        validator.require(files.get("episodes") == "episodes.jsonl", "manifest.files.episodes must be episodes.jsonl")
+        validator.require(files.get("rubrics") == "rubrics.jsonl", "manifest.files.rubrics must be rubrics.jsonl")
+
+    sources = manifest.get("sources")
+    validator.require(isinstance(sources, list) and len(sources) > 0, "manifest.sources must be a non-empty array")
+    if isinstance(sources, list):
+        for index, source in enumerate(sources, start=1):
+            if not isinstance(source, dict):
+                validator.error(f"manifest.sources[{index}] must be an object")
+                continue
+            validator.validate_id(source.get("id"), f"manifest.sources[{index}].id")
+            validator.require(source.get("type") in {"manual", "book", "article", "note", "web", "conversation", "other"},
+                              f"manifest.sources[{index}].type is invalid")
+            validator.require(isinstance(source.get("title"), str) and bool(source.get("title")),
+                              f"manifest.sources[{index}].title is required")
+
+    limits = dict(DEFAULT_LIMITS)
+    constraints = manifest.get("constraints")
+    if isinstance(constraints, dict):
+        for key in limits:
+            value = constraints.get(key)
+            if value is not None:
+                if type(value) is int and value > 0:
+                    limits[key] = value
+                else:
+                    validator.error(f"manifest.constraints.{key} must be a positive integer")
+    return limits
+
+
+def validate_concepts(concepts: list[dict[str, Any]], validator: Validator) -> dict[str, dict[str, Any]]:
+    concept_by_id = collect_by_id(concepts, "concept", validator)
+    for concept_id, concept in concept_by_id.items():
+        validator.require(concept.get("kind") in {"concept", "skill", "phrase", "misconception", "source"},
+                          f"concept {concept_id}: invalid kind")
+        validator.require(isinstance(concept.get("label"), str) and bool(concept.get("label")),
+                          f"concept {concept_id}: label is required")
+        validator.require(isinstance(concept.get("summary"), str) and bool(concept.get("summary")),
+                          f"concept {concept_id}: summary is required")
+        prerequisites = concept.get("prerequisites", [])
+        if not isinstance(prerequisites, list):
+            validator.error(f"concept {concept_id}: prerequisites must be an array")
+            continue
+        for prereq in prerequisites:
+            if prereq not in concept_by_id:
+                validator.error(f"concept {concept_id}: unknown prerequisite {prereq}")
+    return concept_by_id
+
+
+def validate_rubrics(rubrics: list[dict[str, Any]], limits: dict[str, int], validator: Validator) -> dict[str, dict[str, Any]]:
+    rubric_by_id = collect_by_id(rubrics, "rubric", validator)
+    for rubric_id, rubric in rubric_by_id.items():
+        validator.require(rubric.get("kind") in {"self_check", "choice_key", "open_ended", "reflection"},
+                          f"rubric {rubric_id}: invalid kind")
+        criteria = rubric.get("criteria")
+        validator.require(isinstance(criteria, list) and len(criteria) > 0, f"rubric {rubric_id}: criteria required")
+        actions = rubric.get("actions")
+        validator.require(isinstance(actions, list) and len(actions) > 0, f"rubric {rubric_id}: actions required")
+        text_budget = 0
+        if isinstance(criteria, list):
+            for index, criterion in enumerate(criteria, start=1):
+                if not isinstance(criterion, dict):
+                    validator.error(f"rubric {rubric_id}: criteria[{index}] must be an object")
+                    continue
+                validator.validate_id(criterion.get("id"), f"rubric {rubric_id}: criteria[{index}].id")
+                validator.require(isinstance(criterion.get("text"), str) and bool(criterion.get("text")),
+                                  f"rubric {rubric_id}: criteria[{index}].text required")
+                text_budget += text_len(criterion.get("text"))
+        if isinstance(actions, list):
+            seen_actions: set[str] = set()
+            for index, action in enumerate(actions, start=1):
+                if not isinstance(action, dict):
+                    validator.error(f"rubric {rubric_id}: actions[{index}] must be an object")
+                    continue
+                action_id = action.get("id")
+                validator.require(action_id in KNOWN_ACTIONS, f"rubric {rubric_id}: invalid action {action_id}")
+                if isinstance(action_id, str):
+                    seen_actions.add(action_id)
+                validator.require(isinstance(action.get("label"), str) and bool(action.get("label")),
+                                  f"rubric {rubric_id}: actions[{index}].label required")
+                validator.require(isinstance(action.get("meaning"), str) and bool(action.get("meaning")),
+                                  f"rubric {rubric_id}: actions[{index}].meaning required")
+                text_budget += text_len(action.get("label")) + text_len(action.get("meaning"))
+            if not seen_actions:
+                validator.error(f"rubric {rubric_id}: no valid action ids")
+        if text_budget > limits["max_rubric_chars"]:
+            validator.error(f"rubric {rubric_id}: text budget {text_budget} exceeds {limits['max_rubric_chars']}")
+    return rubric_by_id
+
+
+def validate_episodes(
+    episodes: list[dict[str, Any]],
+    concept_by_id: dict[str, dict[str, Any]],
+    rubric_by_id: dict[str, dict[str, Any]],
+    manifest: dict[str, Any],
+    limits: dict[str, int],
+    validator: Validator,
+) -> dict[str, dict[str, Any]]:
+    episode_by_id = collect_by_id(episodes, "episode", validator)
+    entry_episode_id = manifest.get("entry_episode_id")
+    if isinstance(entry_episode_id, str) and entry_episode_id not in episode_by_id:
+        validator.error(f"manifest.entry_episode_id points to missing episode: {entry_episode_id}")
+
+    for episode_id, episode in episode_by_id.items():
+        validator.require(episode.get("type") in KNOWN_EPISODE_TYPES, f"episode {episode_id}: invalid type")
+        validator.require(isinstance(episode.get("title"), str) and bool(episode.get("title")),
+                          f"episode {episode_id}: title is required")
+        validator.require(isinstance(episode.get("objective"), str) and bool(episode.get("objective")),
+                          f"episode {episode_id}: objective is required")
+        prompt = episode.get("prompt")
+        validator.require(isinstance(prompt, str) and bool(prompt), f"episode {episode_id}: prompt is required")
+        if text_len(prompt) > limits["max_prompt_chars"]:
+            validator.error(f"episode {episode_id}: prompt exceeds {limits['max_prompt_chars']} chars")
+        if text_len(episode.get("reveal")) > limits["max_reveal_chars"]:
+            validator.error(f"episode {episode_id}: reveal exceeds {limits['max_reveal_chars']} chars")
+
+        concept_ids = episode.get("concept_ids")
+        validator.require(isinstance(concept_ids, list) and len(concept_ids) > 0,
+                          f"episode {episode_id}: concept_ids must be non-empty")
+        if isinstance(concept_ids, list):
+            for concept_id in concept_ids:
+                if concept_id not in concept_by_id:
+                    validator.error(f"episode {episode_id}: unknown concept {concept_id}")
+
+        rubric_id = episode.get("rubric_id")
+        if rubric_id is not None and rubric_id not in rubric_by_id:
+            validator.error(f"episode {episode_id}: unknown rubric {rubric_id}")
+
+        response = episode.get("response")
+        validator.require(isinstance(response, dict), f"episode {episode_id}: response object required")
+        if isinstance(response, dict):
+            actions = response.get("actions")
+            validator.require(isinstance(actions, list) and len(actions) > 0,
+                              f"episode {episode_id}: response.actions must be non-empty")
+            if isinstance(actions, list):
+                for action in actions:
+                    if action not in KNOWN_ACTIONS:
+                        validator.error(f"episode {episode_id}: invalid response action {action}")
+                if isinstance(rubric_id, str) and rubric_id in rubric_by_id:
+                    rubric_actions = {item.get("id") for item in rubric_by_id[rubric_id].get("actions", []) if isinstance(item, dict)}
+                    for action in actions:
+                        if action not in {"shown", "revealed", "answered"} and action not in rubric_actions:
+                            validator.warn(f"episode {episode_id}: action {action} is not present in rubric {rubric_id}")
+
+        next_ids = episode.get("next", [])
+        if not isinstance(next_ids, list):
+            validator.error(f"episode {episode_id}: next must be an array")
+        else:
+            for next_id in next_ids:
+                if next_id not in episode_by_id:
+                    validator.error(f"episode {episode_id}: unknown next episode {next_id}")
+    return episode_by_id
+
+
+def validate_pack(pack_dir: Path) -> tuple[Validator, dict[str, int]]:
+    validator = Validator()
+    pack_dir = pack_dir.resolve()
+    manifest = read_json(pack_dir / "manifest.json", validator)
+    limits = validate_manifest(manifest, validator)
+
+    concepts = read_jsonl(pack_dir / "concepts.jsonl", validator)
+    episodes = read_jsonl(pack_dir / "episodes.jsonl", validator)
+    rubrics = read_jsonl(pack_dir / "rubrics.jsonl", validator)
+
+    counts = manifest.get("counts", {})
+    if isinstance(counts, dict):
+        expected = {
+            "concepts": len(concepts),
+            "episodes": len(episodes),
+            "rubrics": len(rubrics),
+        }
+        for key, actual in expected.items():
+            if counts.get(key) != actual:
+                validator.error(f"manifest.counts.{key}={counts.get(key)} but {actual} records were found")
+
+    size = pack_size_bytes(pack_dir)
+    if size > limits["max_pack_bytes"]:
+        validator.error(f"pack size {size} bytes exceeds {limits['max_pack_bytes']} bytes")
+
+    concept_by_id = validate_concepts(concepts, validator)
+    rubric_by_id = validate_rubrics(rubrics, limits, validator)
+    episode_by_id = validate_episodes(episodes, concept_by_id, rubric_by_id, manifest, limits, validator)
+
+    summary = {
+        "bytes": size,
+        "concepts": len(concept_by_id),
+        "episodes": len(episode_by_id),
+        "rubrics": len(rubric_by_id),
+    }
+    return validator, summary
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Validate a Biscuit StudyPack v0 directory.")
+    parser.add_argument("pack_dir", type=Path, help="Path to a StudyPack directory containing manifest.json")
+    args = parser.parse_args()
+
+    validator, summary = validate_pack(args.pack_dir)
+    for warning in validator.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+    if validator.errors:
+        for error in validator.errors:
+            print(f"error: {error}", file=sys.stderr)
+        print(f"StudyPack invalid: {args.pack_dir}", file=sys.stderr)
+        return 1
+
+    print(
+        "StudyPack valid: "
+        f"{args.pack_dir} "
+        f"({summary['concepts']} concepts, {summary['episodes']} episodes, "
+        f"{summary['rubrics']} rubrics, {summary['bytes']} bytes)"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

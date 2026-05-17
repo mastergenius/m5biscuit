@@ -197,3 +197,5 @@ on WebSocket for normal offline study.
 - The approved target architecture is no longer "flashcards on M5Paper". It is a local-first
   adaptive learning loop: Mac digital twin agent generates StudyPacks, M5Paper/Mac app execute
   episodes, review logs return to the twin, and the twin generates the next step.
+- StudyPack v0 and ReviewEvent v0 schemas now live under `agents/study-twin/schemas/`, with a
+  French A1 fixture pack and a standard-library validator at `agents/study-twin/tools/validate-pack`.

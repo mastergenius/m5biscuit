@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://biscuit.local/schemas/review-event-v0.schema.json",
+  "title": "Biscuit ReviewEvent v0",
+  "description": "Sequence-based event emitted by a StudyPack runtime and imported by the Mac study twin.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "seq",
+    "device_id",
+    "runtime",
+    "pack_id",
+    "episode_id",
+    "action",
+    "session_ms",
+    "clock"
+  ],
+  "properties": {
+    "schema": {
+      "const": "biscuit.review-event.v0"
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "segment": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "device_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{1,95}$"
+    },
+    "runtime": {
+      "enum": ["m5paper", "mac"]
+    },
+    "pack_id": {
+      "$ref": "#/$defs/id"
+    },
+    "pack_revision": {
+      "type": "string",
+      "maxLength": 64
+    },
+    "episode_id": {
+      "$ref": "#/$defs/id"
+    },
+    "concept_ids": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/id"
+      },
+      "uniqueItems": true
+    },
+    "action": {
+      "enum": [
+        "shown",
+        "revealed",
+        "answered",
+        "again",
+        "hard",
+        "good",
+        "easy",
+        "confused",
+        "skipped",
+        "undo"
+      ]
+    },
+    "session_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "latency_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "confidence": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "effort": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "clock": {
+      "enum": ["unknown", "mac_sync", "ntp_sync", "rtc_or_saved"]
+    },
+    "utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "response": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "choice_id": {
+          "$ref": "#/$defs/id"
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 2048
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{1,95}$"
+    }
+  }
+}
