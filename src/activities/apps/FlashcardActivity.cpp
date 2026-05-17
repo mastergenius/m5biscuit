@@ -4,6 +4,7 @@
 #include <HalStorage.h>
 #include <string>
 
+#include <cstdio>
 #include <cstring>
 
 #include "MappedInputManager.h"
@@ -26,6 +27,25 @@ void FlashcardActivity::scanDecks() {
     }
   }
   dir.close();
+}
+
+std::string FlashcardActivity::deckIdFromPath(const std::string& path) {
+  const size_t slash = path.rfind('/');
+  const size_t start = (slash == std::string::npos) ? 0 : slash + 1;
+  size_t end = path.rfind('.');
+  if (end == std::string::npos || end < start) {
+    end = path.size();
+  }
+
+  std::string id;
+  id.reserve(end - start);
+  for (size_t i = start; i < end; i++) {
+    const char c = path[i];
+    const bool safe = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' ||
+                      c == '_' || c == '.';
+    id.push_back(safe ? c : '_');
+  }
+  return id.empty() ? "deck" : id;
 }
 
 bool FlashcardActivity::loadDeck(const std::string& path) {
@@ -56,7 +76,25 @@ bool FlashcardActivity::loadDeck(const std::string& path) {
     cards.push_back(card);
   }
   file.close();
+  currentDeckId = deckIdFromPath(path);
+  sessionStartMs = millis();
   return !cards.empty();
+}
+
+void FlashcardActivity::enterCardFront() {
+  state = CARD_FRONT;
+  logReviewAction("shown");
+  requestUpdate();
+}
+
+void FlashcardActivity::logReviewAction(const char* action) {
+  if (cards.empty() || cardIndex < 0 || cardIndex >= (int)cards.size()) {
+    return;
+  }
+  char cardId[80];
+  snprintf(cardId, sizeof(cardId), "%s:%lu", currentDeckId.c_str(), static_cast<unsigned long>(cardIndex + 1));
+  reviewLog.append(StudyReviewLog::Event{currentDeckId.c_str(), cardId, action, static_cast<uint32_t>(cardIndex),
+                                         static_cast<uint32_t>(millis() - sessionStartMs)});
 }
 
 void FlashcardActivity::onEnter() {
@@ -84,8 +122,7 @@ void FlashcardActivity::loop() {
     if (mappedInput.wasPressed(MappedInputManager::Button::Confirm) && !deckFiles.empty()) {
       if (loadDeck(deckFiles[deckIndex])) {
         cardIndex = 0;
-        state = CARD_FRONT;
-        requestUpdate();
+        enterCardFront();
       }
     }
     return;
@@ -96,6 +133,7 @@ void FlashcardActivity::loop() {
       state = DECK_SELECT; requestUpdate(); return;
     }
     if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
+      logReviewAction("revealed");
       state = CARD_BACK; requestUpdate();
     }
     return;
@@ -106,16 +144,18 @@ void FlashcardActivity::loop() {
       state = DECK_SELECT; requestUpdate(); return;
     }
     if (mappedInput.wasPressed(MappedInputManager::Button::Left)) {
+      logReviewAction("again");
       cards[cardIndex].wrong++;
       cardIndex++;
       if (cardIndex >= (int)cards.size()) { state = STATS; requestUpdate(); return; }
-      state = CARD_FRONT; requestUpdate();
+      enterCardFront();
     }
     if (mappedInput.wasPressed(MappedInputManager::Button::Right)) {
+      logReviewAction("good");
       cards[cardIndex].correct++;
       cardIndex++;
       if (cardIndex >= (int)cards.size()) { state = STATS; requestUpdate(); return; }
-      state = CARD_FRONT; requestUpdate();
+      enterCardFront();
     }
     return;
   }

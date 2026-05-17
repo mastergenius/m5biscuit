@@ -3,6 +3,7 @@
 #include <string>
 
 #include "activities/Activity.h"
+#include "study/StudyReviewLog.h"
 #include "util/ButtonNavigator.h"
 
 class FlashcardActivity final : public Activity {
@@ -28,6 +29,9 @@ class FlashcardActivity final : public Activity {
 
   std::vector<std::string> deckFiles;
   std::vector<Card> cards;
+  StudyReviewLog reviewLog;
+  std::string currentDeckId;
+  unsigned long sessionStartMs = 0;
   int deckIndex = 0;
   int cardIndex = 0;
 
@@ -35,6 +39,9 @@ class FlashcardActivity final : public Activity {
 
   void scanDecks();
   bool loadDeck(const std::string& path);
+  void enterCardFront();
+  void logReviewAction(const char* action);
+  static std::string deckIdFromPath(const std::string& path);
   void renderDeckSelect() const;
   void renderCardFront() const;
   void renderCardBack() const;

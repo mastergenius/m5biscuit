@@ -269,8 +269,9 @@ Example envelope, intentionally transport-neutral:
 
 ## Next Actions
 
-1. Commit the current M5Paper known-good firmware state.
-2. Add a tiny `DeviceIdentity` model and status endpoint to the existing web server.
-3. Add a manual protocol smoke test using a browser or `curl` against M5Paper.
-4. Create a separate ESP-NOW lab target or sample app outside the stable M5Paper reader path.
-5. Revisit BLE after the scan-only memory/radio probe is measured.
+1. Keep committing each M5Paper known-good stabilization point after hardware smoke testing.
+2. Add the StudyPack v0 deck schema and validation helpers.
+3. Add study sync endpoints for deck listing/upload and rotated review-log download/ack.
+4. Add a manual protocol smoke test using a browser or `curl` against M5Paper.
+5. Create a separate ESP-NOW lab target or sample app outside the stable M5Paper reader path.
+6. Revisit BLE after the scan-only memory/radio probe is measured.

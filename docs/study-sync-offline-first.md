@@ -162,3 +162,12 @@ on WebSocket for normal offline study.
 5. Add sync endpoints for deck upload, log download, and ack.
 6. Build a Mac helper/app after the device-side format is stable enough to test manually.
 
+## Implementation Status
+
+- Session-token protected WiFi transfer is implemented for HTTP, WebDAV, and WebSocket upload.
+- Saved-WiFi is the normal transfer path; WPA2 hotspot mode is available as bootstrap/fallback.
+- The legacy CSV `Flashcards` app now writes offline review events to rotated JSONL segments under
+  `/biscuit/study/logs/reviews/`.
+- Review ordering is sequence-based. Segment names are monotonic (`reviews_000001.jsonl`) and state
+  is tracked in `/biscuit/study/logs/sync_state.json`; wall-clock time is explicitly marked
+  `unknown` until a trusted Mac/NTP time source is added.
