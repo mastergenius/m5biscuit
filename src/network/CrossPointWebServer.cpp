@@ -12,10 +12,12 @@
 
 #include "CrossPointSettings.h"
 #include "SettingsList.h"
+#include "WifiCredentialStore.h"
 #include "WebDAVHandler.h"
 #include "html/FilesPageHtml.generated.h"
 #include "html/HomePageHtml.generated.h"
 #include "html/SettingsPageHtml.generated.h"
+#include "html/WifiSetupPageHtml.generated.h"
 #include "html/js/jszip_minJs.generated.h"
 
 namespace {
@@ -134,9 +136,12 @@ void CrossPointWebServer::begin() {
   LOG_DBG("WEB", "Setting up routes...");
   server->on("/", HTTP_GET, [this] { handleRoot(); });
   server->on("/files", HTTP_GET, [this] { handleFileList(); });
+  server->on("/wifi", HTTP_GET, [this] { handleWifiSetupPage(); });
   server->on("/js/jszip.min.js", HTTP_GET, [this] { handleJszip(); });
 
   server->on("/api/status", HTTP_GET, [this] { handleStatus(); });
+  server->on("/api/wifi", HTTP_GET, [this] { handleGetWifiCredentials(); });
+  server->on("/api/wifi", HTTP_POST, [this] { handlePostWifiCredentials(); });
   server->on("/api/files", HTTP_GET, [this] { handleFileListData(); });
   server->on("/download", HTTP_GET, [this] { handleDownload(); });
 
@@ -1068,6 +1073,78 @@ void CrossPointWebServer::handleDelete() const {
 void CrossPointWebServer::handleSettingsPage() const {
   sendHtmlContent(server.get(), SettingsPageHtml, sizeof(SettingsPageHtml));
   LOG_DBG("WEB", "Served settings page");
+}
+
+void CrossPointWebServer::handleWifiSetupPage() const {
+  sendHtmlContent(server.get(), WifiSetupPageHtml, sizeof(WifiSetupPageHtml));
+  LOG_DBG("WEB", "Served WiFi setup page");
+}
+
+void CrossPointWebServer::handleGetWifiCredentials() const {
+  WIFI_STORE.loadFromFile();
+
+  JsonDocument doc;
+  doc["lastConnectedSsid"] = WIFI_STORE.getLastConnectedSsid();
+  JsonArray credentials = doc["credentials"].to<JsonArray>();
+  for (const auto& cred : WIFI_STORE.getCredentials()) {
+    if (cred.ssid.empty()) continue;
+    JsonObject item = credentials.add<JsonObject>();
+    item["ssid"] = cred.ssid;
+    item["hasPassword"] = !cred.password.empty();
+  }
+
+  String output;
+  serializeJson(doc, output);
+  server->send(200, "application/json", output);
+  LOG_DBG("WEB", "Served WiFi credentials list (%zu saved)", credentials.size());
+}
+
+void CrossPointWebServer::handlePostWifiCredentials() {
+  String ssid;
+  String password;
+
+  if (server->hasArg("plain") && !server->arg("plain").isEmpty()) {
+    JsonDocument doc;
+    const DeserializationError err = deserializeJson(doc, server->arg("plain"));
+    if (err) {
+      server->send(400, "text/plain", String("Invalid JSON: ") + err.c_str());
+      return;
+    }
+    ssid = doc["ssid"] | "";
+    password = doc["password"] | "";
+  } else {
+    ssid = server->arg("ssid");
+    password = server->arg("password");
+  }
+
+  ssid.trim();
+  if (ssid.isEmpty()) {
+    server->send(400, "text/plain", "SSID is required");
+    return;
+  }
+  if (ssid.length() > 32) {
+    server->send(400, "text/plain", "SSID must be 32 bytes or less");
+    return;
+  }
+  if (password.length() > 64) {
+    server->send(400, "text/plain", "Password must be 64 bytes or less");
+    return;
+  }
+
+  WIFI_STORE.loadFromFile();
+  if (!WIFI_STORE.addCredential(ssid.c_str(), password.c_str())) {
+    server->send(507, "text/plain", "Could not save WiFi credentials");
+    return;
+  }
+  WIFI_STORE.setLastConnectedSsid(ssid.c_str());
+
+  JsonDocument response;
+  response["ok"] = true;
+  response["ssid"] = ssid;
+  String output;
+  serializeJson(response, output);
+  server->send(200, "application/json", output);
+  LOG_DBG("WEB", "Saved WiFi credentials for: %s", ssid.c_str());
 }
 
 void CrossPointWebServer::handleGetSettings() const {

@@ -8,6 +8,7 @@
 #include <cassert>
 
 #include "HalBoard.h"
+#include "HalSharedSpi.h"
 
 #if BISCUIT_BOARD_M5PAPER
 #include <SPI.h>
@@ -22,16 +23,20 @@
 HalStorage HalStorage::instance;
 
 HalStorage::HalStorage() {
-  storageMutex = xSemaphoreCreateMutex();
+  storageMutex = xSemaphoreCreateRecursiveMutex();
   assert(storageMutex != nullptr);
 }
 
 // For the rest of the methods, we acquire the mutex to ensure thread safety
 
 class HalStorage::StorageLock {
+#if BISCUIT_BOARD_M5PAPER
+  HalSharedSpiLock spiLock;
+#endif
+
  public:
-  StorageLock() { xSemaphoreTake(HalStorage::getInstance().storageMutex, portMAX_DELAY); }
-  ~StorageLock() { xSemaphoreGive(HalStorage::getInstance().storageMutex); }
+  StorageLock() { xSemaphoreTakeRecursive(HalStorage::getInstance().storageMutex, portMAX_DELAY); }
+  ~StorageLock() { xSemaphoreGiveRecursive(HalStorage::getInstance().storageMutex); }
 };
 
 class HalFile::Impl {
@@ -44,11 +49,29 @@ HalFile::HalFile() = default;
 
 HalFile::HalFile(std::unique_ptr<Impl> impl) : impl(std::move(impl)) {}
 
-HalFile::~HalFile() = default;
+HalFile::~HalFile() {
+  if (impl) {
+    HalStorage::StorageLock lock;
+    if (impl->file.isOpen()) {
+      impl->file.close();
+    }
+  }
+}
 
-HalFile::HalFile(HalFile&&) = default;
+HalFile::HalFile(HalFile&& other) : impl(std::move(other.impl)) {}
 
-HalFile& HalFile::operator=(HalFile&&) = default;
+HalFile& HalFile::operator=(HalFile&& other) {
+  if (this != &other) {
+    if (impl) {
+      HalStorage::StorageLock lock;
+      if (impl->file.isOpen()) {
+        impl->file.close();
+      }
+    }
+    impl = std::move(other.impl);
+  }
+  return *this;
+}
 
 #if BISCUIT_BOARD_M5PAPER
 
@@ -109,6 +132,10 @@ bool HalStorage::begin() {
   StorageLock lock;
   SPI.begin(M5PAPER_SPI_SCLK, M5PAPER_SPI_MISO, M5PAPER_SPI_MOSI, M5PAPER_SD_CS);
   initialized = sd.begin(SdSpiConfig(M5PAPER_SD_CS, DEDICATED_SPI, SD_SCK_MHZ(25), &SPI));
+  if (!initialized) {
+    LOG_ERR("SD", "begin failed sdError=0x%02x data=0x%08lx", sd.sdErrorCode(),
+            static_cast<unsigned long>(sd.sdErrorData()));
+  }
   return initialized;
 }
 
@@ -243,10 +270,13 @@ bool HalStorage::rmdir(const char* path) {
 }
 
 bool HalStorage::openFileForRead(const char* moduleName, const char* path, HalFile& file) {
-  (void)moduleName;
   StorageLock lock;
   FsFile fsFile = sd.open(path, O_RDONLY);
   const bool ok = static_cast<bool>(fsFile);
+  if (!ok) {
+    LOG_ERR(moduleName ? moduleName : "SD", "open read failed: %s sdError=0x%02x data=0x%08lx", path,
+            sd.sdErrorCode(), static_cast<unsigned long>(sd.sdErrorData()));
+  }
   file = HalFile(std::make_unique<HalFile::Impl>(std::move(fsFile)));
   return ok;
 }
@@ -260,11 +290,16 @@ bool HalStorage::openFileForRead(const char* moduleName, const String& path, Hal
 }
 
 bool HalStorage::openFileForWrite(const char* moduleName, const char* path, HalFile& file) {
-  (void)moduleName;
   StorageLock lock;
-  makeParentDirectory(path);
+  if (!makeParentDirectory(path)) {
+    LOG_ERR(moduleName ? moduleName : "SD", "parent directory create failed for: %s", path);
+  }
   FsFile fsFile = sd.open(path, O_WRITE | O_CREAT | O_TRUNC);
   const bool ok = static_cast<bool>(fsFile);
+  if (!ok) {
+    LOG_ERR(moduleName ? moduleName : "SD", "open write failed: %s sdError=0x%02x data=0x%08lx", path,
+            sd.sdErrorCode(), static_cast<unsigned long>(sd.sdErrorData()));
+  }
   file = HalFile(std::make_unique<HalFile::Impl>(std::move(fsFile)));
   return ok;
 }
@@ -377,13 +412,14 @@ bool HalStorage::removeDir(const char* path) { HAL_STORAGE_WRAPPED_CALL(removeDi
   return impl->file.method(__VA_ARGS__);
 
 #define HAL_FILE_FORWARD_CALL(method, ...) \
+  HalStorage::StorageLock lock;            \
   assert(impl != nullptr);                 \
   return impl->file.method(__VA_ARGS__);
 
 void HalFile::flush() { HAL_FILE_WRAPPED_CALL(flush, ); }
 size_t HalFile::getName(char* name, size_t len) { HAL_FILE_WRAPPED_CALL(getName, name, len); }
-size_t HalFile::size() { HAL_FILE_FORWARD_CALL(size, ); }          // already thread-safe, no need to wrap
-size_t HalFile::fileSize() { HAL_FILE_FORWARD_CALL(fileSize, ); }  // already thread-safe, no need to wrap
+size_t HalFile::size() { HAL_FILE_FORWARD_CALL(size, ); }
+size_t HalFile::fileSize() { HAL_FILE_FORWARD_CALL(fileSize, ); }
 bool HalFile::seek(size_t pos) { HAL_FILE_WRAPPED_CALL(seekSet, pos); }
 bool HalFile::seekCur(int64_t offset) { HAL_FILE_WRAPPED_CALL(seekCur, offset); }
 bool HalFile::seekSet(size_t offset) { HAL_FILE_WRAPPED_CALL(seekSet, offset); }
@@ -394,7 +430,7 @@ int HalFile::read() { HAL_FILE_WRAPPED_CALL(read, ); }
 size_t HalFile::write(const void* buf, size_t count) { HAL_FILE_WRAPPED_CALL(write, buf, count); }
 size_t HalFile::write(uint8_t b) { HAL_FILE_WRAPPED_CALL(write, b); }
 bool HalFile::rename(const char* newPath) { HAL_FILE_WRAPPED_CALL(rename, newPath); }
-bool HalFile::isDirectory() const { HAL_FILE_FORWARD_CALL(isDirectory, ); }  // already thread-safe, no need to wrap
+bool HalFile::isDirectory() const { HAL_FILE_FORWARD_CALL(isDirectory, ); }
 void HalFile::rewindDirectory() { HAL_FILE_WRAPPED_CALL(rewindDirectory, ); }
 bool HalFile::close() { HAL_FILE_WRAPPED_CALL(close, ); }
 HalFile HalFile::openNextFile() {
@@ -402,5 +438,11 @@ HalFile HalFile::openNextFile() {
   assert(impl != nullptr);
   return HalFile(std::make_unique<Impl>(impl->file.openNextFile()));
 }
-bool HalFile::isOpen() const { return impl != nullptr && impl->file.isOpen(); }  // already thread-safe, no need to wrap
+bool HalFile::isOpen() const {
+  if (!impl) {
+    return false;
+  }
+  HalStorage::StorageLock lock;
+  return impl->file.isOpen();
+}
 HalFile::operator bool() const { return isOpen(); }

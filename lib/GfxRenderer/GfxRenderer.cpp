@@ -1145,6 +1145,8 @@ void GfxRenderer::copyGrayscaleLsbBuffers() const { display.copyGrayscaleLsbBuff
 
 void GfxRenderer::copyGrayscaleMsbBuffers() const { display.copyGrayscaleMsbBuffers(frameBuffer); }
 
+bool GfxRenderer::supportsGrayscale() const { return display.supportsGrayscale(); }
+
 void GfxRenderer::displayGrayBuffer() const {
   if (inverted) {
     invertScreen();

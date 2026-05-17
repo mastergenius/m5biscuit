@@ -241,55 +241,70 @@ void XMLCALL ContentOpfParser::startElement(void* userData, const XML_Char* name
   // Only run the spine parsing if there's a cache to add it to
   if (self->cache) {
     if (self->state == IN_SPINE && (strcmp(name, "itemref") == 0 || strcmp(name, "opf:itemref") == 0)) {
+      std::string idref;
+      bool linearNo = false;
+
       for (int i = 0; atts[i]; i += 2) {
         if (strcmp(atts[i], "idref") == 0) {
-          const std::string idref = atts[i + 1];
-          std::string href;
-          bool found = false;
+          idref = atts[i + 1];
+        } else if (strcmp(atts[i], "linear") == 0 && strcmp(atts[i + 1], "no") == 0) {
+          linearNo = true;
+        }
+      }
 
-          if (self->useItemIndex) {
-            // Fast path: binary search
-            uint32_t targetHash = fnvHash(idref);
-            uint16_t targetLen = static_cast<uint16_t>(idref.size());
+      if (idref.empty() || linearNo) {
+        return;
+      }
 
-            auto it = std::lower_bound(self->itemIndex.begin(), self->itemIndex.end(),
-                                       ItemIndexEntry{targetHash, targetLen, 0},
-                                       [](const ItemIndexEntry& a, const ItemIndexEntry& b) {
-                                         return a.idHash < b.idHash || (a.idHash == b.idHash && a.idLen < b.idLen);
-                                       });
+      std::string href;
+      bool found = false;
 
-            // Check for match (may need to check a few due to hash collisions)
-            while (it != self->itemIndex.end() && it->idHash == targetHash) {
-              self->tempItemStore.seek(it->fileOffset);
-              std::string itemId;
-              serialization::readString(self->tempItemStore, itemId);
-              if (itemId == idref) {
-                serialization::readString(self->tempItemStore, href);
-                found = true;
-                break;
-              }
-              ++it;
-            }
-          } else {
-            // Slow path: linear scan (for small manifests, keeps original behavior)
-            // TODO: This lookup is slow as need to scan through all items each time.
-            //       It can take up to 200ms per item when getting to 1500 items.
-            self->tempItemStore.seek(0);
-            std::string itemId;
-            while (self->tempItemStore.available()) {
-              serialization::readString(self->tempItemStore, itemId);
-              serialization::readString(self->tempItemStore, href);
-              if (itemId == idref) {
-                found = true;
-                break;
-              }
-            }
+      if (self->useItemIndex) {
+        // Fast path: binary search
+        uint32_t targetHash = fnvHash(idref);
+        uint16_t targetLen = static_cast<uint16_t>(idref.size());
+
+        auto it = std::lower_bound(self->itemIndex.begin(), self->itemIndex.end(),
+                                   ItemIndexEntry{targetHash, targetLen, 0},
+                                   [](const ItemIndexEntry& a, const ItemIndexEntry& b) {
+                                     return a.idHash < b.idHash || (a.idHash == b.idHash && a.idLen < b.idLen);
+                                   });
+
+        // Check for match (may need to check a few due to hash collisions)
+        while (it != self->itemIndex.end() && it->idHash == targetHash) {
+          self->tempItemStore.seek(it->fileOffset);
+          std::string itemId;
+          serialization::readString(self->tempItemStore, itemId);
+          if (itemId == idref) {
+            serialization::readString(self->tempItemStore, href);
+            found = true;
+            break;
           }
-
-          if (found && self->cache) {
-            self->cache->createSpineEntry(href);
+          ++it;
+        }
+      } else {
+        // Slow path: linear scan (for small manifests, keeps original behavior)
+        // TODO: This lookup is slow as need to scan through all items each time.
+        //       It can take up to 200ms per item when getting to 1500 items.
+        self->tempItemStore.seek(0);
+        std::string itemId;
+        while (self->tempItemStore.available()) {
+          serialization::readString(self->tempItemStore, itemId);
+          serialization::readString(self->tempItemStore, href);
+          if (itemId == idref) {
+            found = true;
+            break;
           }
         }
+      }
+
+      if (found && href == self->tocNavPath) {
+        LOG_DBG("COF", "Skipping EPUB nav document from reading spine: %s", href.c_str());
+        return;
+      }
+
+      if (found && self->cache) {
+        self->cache->createSpineEntry(href);
       }
       return;
     }

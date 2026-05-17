@@ -78,6 +78,8 @@ class BookMetadataCache {
 
   uint32_t writeSpineEntry(FsFile& file, const SpineEntry& entry) const;
   uint32_t writeTocEntry(FsFile& file, const TocEntry& entry) const;
+  bool readSpineEntry(FsFile& file, SpineEntry& entry) const;
+  bool readTocEntry(FsFile& file, TocEntry& entry) const;
   SpineEntry readSpineEntry(FsFile& file) const;
   TocEntry readTocEntry(FsFile& file) const;
 

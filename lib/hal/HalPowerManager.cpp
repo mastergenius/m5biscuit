@@ -1,5 +1,6 @@
 #include "HalPowerManager.h"
 
+#include <HalSharedSpi.h>
 #include <Logging.h>
 #include <WiFi.h>
 #include <esp_sleep.h>
@@ -75,8 +76,11 @@ void HalPowerManager::startDeepSleep(HalGPIO& gpio) const {
     gpio.update();
   }
   pinMode(M5PAPER_BTN_PUSH, INPUT);
-  M5.Display.sleep();
-  M5.Display.waitDisplay();
+  {
+    HalSharedSpiLock lock;
+    M5.Display.sleep();
+    M5.Display.waitDisplay();
+  }
   esp_sleep_enable_ext0_wakeup(static_cast<gpio_num_t>(M5PAPER_BTN_PUSH), 0);
   esp_deep_sleep_start();
 #else

@@ -235,12 +235,18 @@ void XtcReaderActivity::renderPage() {
     if (pagesUntilFullRefresh <= 1) {
       renderer.displayBuffer(HalDisplay::HALF_REFRESH);
       pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
-    } else {
-      renderer.displayBuffer();
-      pagesUntilFullRefresh--;
-    }
+	    } else {
+	      renderer.displayBuffer();
+	      pagesUntilFullRefresh--;
+	    }
 
-    // Pass 2: LSB buffer - mark DARK gray only (XTH value 1)
+	    if (!renderer.supportsGrayscale()) {
+	      free(pageBuffer);
+	      LOG_DBG("XTR", "Rendered page %lu/%lu (2-bit BW fallback)", currentPage + 1, xtc->getPageCount());
+	      return;
+	    }
+
+	    // Pass 2: LSB buffer - mark DARK gray only (XTH value 1)
     // In LUT: 0 bit = apply gray effect, 1 bit = untouched
     renderer.clearScreen(0x00);
     for (uint16_t y = 0; y < pageHeight; y++) {

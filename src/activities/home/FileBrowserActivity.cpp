@@ -75,6 +75,7 @@ void FileBrowserActivity::loadFiles() {
 
   auto root = Storage.open(basepath.c_str());
   if (!root || !root.isDirectory()) {
+    LOG_DBG("FileBrowser", "Failed to open directory: %s", basepath.c_str());
     if (root) root.close();
     return;
   }
@@ -82,8 +83,11 @@ void FileBrowserActivity::loadFiles() {
   root.rewindDirectory();
 
   char name[500];
+  size_t totalEntries = 0;
+  size_t acceptedEntries = 0;
   for (auto file = root.openNextFile(); file; file = root.openNextFile()) {
     file.getName(name, sizeof(name));
+    totalEntries++;
     if ((!SETTINGS.showHiddenFiles && name[0] == '.') || strcmp(name, "System Volume Information") == 0) {
       file.close();
       continue;
@@ -91,18 +95,22 @@ void FileBrowserActivity::loadFiles() {
 
     if (file.isDirectory()) {
       files.emplace_back(std::string(name) + "/");
+      acceptedEntries++;
     } else {
       std::string_view filename{name};
       if (FsHelpers::hasEpubExtension(filename) || FsHelpers::hasXtcExtension(filename) ||
           FsHelpers::hasTxtExtension(filename) || FsHelpers::hasMarkdownExtension(filename) ||
           FsHelpers::hasBmpExtension(filename)) {
         files.emplace_back(filename);
+        acceptedEntries++;
       }
     }
     file.close();
   }
   root.close();
   sortFileList(files);
+  LOG_DBG("FileBrowser", "Loaded %u/%u entries from %s", static_cast<unsigned>(acceptedEntries),
+          static_cast<unsigned>(totalEntries), basepath.c_str());
 }
 
 void FileBrowserActivity::onEnter() {

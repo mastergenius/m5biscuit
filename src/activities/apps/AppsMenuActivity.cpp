@@ -92,7 +92,11 @@
 #include "activities/home/RecentBooksActivity.h"
 #include "activities/browser/OpdsBookBrowserActivity.h"
 #include "activities/settings/SettingsActivity.h"
+#if BISCUIT_BOARD_M5PAPER
+#include "activities/network/CrossPointWebServerActivity.h"
+#else
 #include "activities/network/NetworkModeSelectionActivity.h"
+#endif
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include <esp_system.h>
@@ -112,6 +116,18 @@ static constexpr RadarNode kRadarNodes[8] = {
   {"READER",    5},
   {"SETTINGS",  7},
 };
+
+namespace {
+std::unique_ptr<Activity> makeWifiTransferActivity(GfxRenderer& renderer, MappedInputManager& mappedInput) {
+#if BISCUIT_BOARD_M5PAPER
+  return std::make_unique<CrossPointWebServerActivity>(renderer, mappedInput);
+#else
+  // Keep the ROM-constrained default target on the pre-existing lightweight selector path.
+  // Linking the full web-transfer activity from AppsMenu currently overflows its OTA slot.
+  return std::make_unique<NetworkModeSelectionActivity>(renderer, mappedInput);
+#endif
+}
+}  // namespace
 
 void AppsMenuActivity::onEnter() {
   Activity::onEnter();
@@ -286,7 +302,7 @@ void AppsMenuActivity::loop() {
                 AppCategoryActivity::SectionHeader("PREFERENCES"),
                 {"Settings", "Display, reader, controls, system", UIIcon::Settings, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<SettingsActivity>(r, m); }},
                 AppCategoryActivity::SectionHeader("FILE TRANSFER"),
-                {"WiFi Transfer", "Upload/download via WiFi", UIIcon::Transfer, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<NetworkModeSelectionActivity>(r, m); }},
+                {"WiFi Transfer", "Upload/download via WiFi", UIIcon::Transfer, makeWifiTransferActivity},
                 AppCategoryActivity::SectionHeader("SYSTEM"),
                 {"Task Manager", "View heap, uptime, activity stack", UIIcon::Settings, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<TaskManagerActivity>(r, m); }},
                 {"Battery", "Battery level + history graph", UIIcon::File, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<BatteryMonitorActivity>(r, m); }},
@@ -511,7 +527,7 @@ void AppsMenuActivity::loop() {
               AppCategoryActivity::SectionHeader("PREFERENCES"),
               {"Settings", "Display, reader, controls, system", UIIcon::Settings, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<SettingsActivity>(r, m); }},
               AppCategoryActivity::SectionHeader("FILE TRANSFER"),
-              {"WiFi Transfer", "Upload/download via WiFi", UIIcon::Transfer, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<NetworkModeSelectionActivity>(r, m); }},
+              {"WiFi Transfer", "Upload/download via WiFi", UIIcon::Transfer, makeWifiTransferActivity},
               AppCategoryActivity::SectionHeader("SYSTEM"),
               {"Task Manager", "View heap, uptime, activity stack", UIIcon::Settings, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<TaskManagerActivity>(r, m); }},
               {"Battery", "Battery level + history graph", UIIcon::File, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<BatteryMonitorActivity>(r, m); }},

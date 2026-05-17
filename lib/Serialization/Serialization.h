@@ -43,10 +43,29 @@ static void readString(std::istream& is, std::string& s) {
   is.read(&s[0], len);
 }
 
-static void readString(FsFile& file, std::string& s) {
+static bool readString(FsFile& file, std::string& s, const uint32_t maxLen) {
   uint32_t len;
-  readPod(file, len);
+  if (file.read(reinterpret_cast<uint8_t*>(&len), sizeof(len)) != sizeof(len)) {
+    s.clear();
+    return false;
+  }
+  if (len > maxLen || len > static_cast<uint32_t>(file.available())) {
+    s.clear();
+    return false;
+  }
   s.resize(len);
-  file.read(&s[0], len);
+  if (len == 0) {
+    return true;
+  }
+  if (file.read(&s[0], len) != static_cast<int>(len)) {
+    s.clear();
+    return false;
+  }
+  return true;
+}
+
+static void readString(FsFile& file, std::string& s) {
+  constexpr uint32_t MAX_SERIALIZED_STRING_LEN = 8192;
+  readString(file, s, MAX_SERIALIZED_STRING_LEN);
 }
 }  // namespace serialization

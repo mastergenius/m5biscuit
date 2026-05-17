@@ -498,14 +498,22 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
   if (!wasOpen && !open()) {
     return false;
   }
+  const auto closeIfOwned = [this, wasOpen]() {
+    if (!wasOpen) {
+      close();
+    }
+  };
 
   FileStatSlim fileStat = {};
   if (!loadFileStatSlim(filename, &fileStat)) {
+    LOG_ERR("ZIP", "Could not find file in zip: %s", filename);
+    closeIfOwned();
     return false;
   }
 
   const long fileOffset = getDataOffset(fileStat);
   if (fileOffset < 0) {
+    closeIfOwned();
     return false;
   }
 
@@ -518,9 +526,7 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
     const auto buffer = static_cast<uint8_t*>(malloc(chunkSize));
     if (!buffer) {
       LOG_ERR("ZIP", "Failed to allocate memory for buffer");
-      if (!wasOpen) {
-        close();
-      }
+      closeIfOwned();
       return false;
     }
 
@@ -530,19 +536,20 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
       if (dataRead == 0) {
         LOG_ERR("ZIP", "Could not read more bytes");
         free(buffer);
-        if (!wasOpen) {
-          close();
-        }
+        closeIfOwned();
         return false;
       }
 
-      out.write(buffer, dataRead);
+      if (out.write(buffer, dataRead) != dataRead) {
+        LOG_ERR("ZIP", "Failed to write all stored bytes to stream");
+        free(buffer);
+        closeIfOwned();
+        return false;
+      }
       remaining -= dataRead;
     }
 
-    if (!wasOpen) {
-      close();
-    }
+    closeIfOwned();
     free(buffer);
     return true;
   }
@@ -551,9 +558,7 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
     auto* fileReadBuffer = static_cast<uint8_t*>(malloc(chunkSize));
     if (!fileReadBuffer) {
       LOG_ERR("ZIP", "Failed to allocate memory for zip file read buffer");
-      if (!wasOpen) {
-        close();
-      }
+      closeIfOwned();
       return false;
     }
 
@@ -561,9 +566,7 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
     if (!outputBuffer) {
       LOG_ERR("ZIP", "Failed to allocate memory for output buffer");
       free(fileReadBuffer);
-      if (!wasOpen) {
-        close();
-      }
+      closeIfOwned();
       return false;
     }
 
@@ -577,9 +580,7 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
       LOG_ERR("ZIP", "Failed to init inflate reader");
       free(outputBuffer);
       free(fileReadBuffer);
-      if (!wasOpen) {
-        close();
-      }
+      closeIfOwned();
       return false;
     }
     ctx.reader.setReadCallback(zipReadCallback);
@@ -623,17 +624,13 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
       // InflateStatus::Ok: output buffer full, continue
     }
 
-    if (!wasOpen) {
-      close();
-    }
+    closeIfOwned();
     free(outputBuffer);
     free(fileReadBuffer);
     return success;  // ctx.reader destructor frees the ring buffer
   }
 
-  if (!wasOpen) {
-    close();
-  }
+  closeIfOwned();
 
   LOG_ERR("ZIP", "Unsupported compression method");
   return false;

@@ -36,10 +36,108 @@ TF-card storage, and dial switch pins on GPIO37/GPIO38/GPIO39/GPIO2.
 References:
 
 - https://docs.m5stack.com/en/core/m5paper
+- https://docs.m5stack.com/en/core/m5paper_v1.1
 - https://github.com/m5stack/M5EPD
 
 The legacy `M5EPD` repository now recommends `M5GFX` and `M5Unified`. The port should start with
 M5GFX/M5Unified unless a compile or hardware blocker forces the legacy M5EPD driver.
+
+## Current Device And Memory Notes
+
+Captured during the first hardware bring-up on 2026-05-17:
+
+- The target device is original M5Paper/Paper v1.1, not PaperS3.
+- The board reports `ESP32-D0WDQ6-V3`, WiFi/BT capable, 240MHz, 16MB flash.
+- Official M5Stack specs list 520KB internal SRAM and 8MB PSRAM. Arduino heap reports roughly
+  4MB PSRAM as directly allocatable memory on this build; the remaining PSRAM is not exposed as
+  normal heap without using ESP32 himem-style APIs.
+- Boot logs observed around `heap=238KB` and `psram=4192KB` before display init. M5GFX/M5Unified
+  display init consumes about 1.1MB PSRAM, leaving roughly `psram=3078KB`.
+- The firmware is built with `board_build.psram = enabled`, `BOARD_HAS_PSRAM`, and
+  `-mfix-esp32-psram-cache-issue`.
+- The shared `partitions.csv` gives each OTA application slot `0x640000` bytes, so the effective
+  maximum firmware image is 6,553,600 bytes per slot, not the full 16MB flash.
+- Current `m5paper` build after the grayscale fallback, WiFi setup page, M5Paper web-transfer launch
+  path, and EPUB cache hardening is `3,516,911 / 6,553,600` bytes of flash, roughly 53.7% of one
+  OTA slot.
+- Current `default` build is `6,520,585 / 6,553,600` bytes of flash, roughly 99.5% of one OTA
+  slot. The default target is therefore ROM-constrained; M5Paper is not currently ROM-constrained.
+- The current `m5paper` detailed link map reports internal DRAM at `79,472 / 124,580` bytes and
+  IRAM at `102,007 / 131,072` bytes. The coarse PlatformIO RAM line includes PSRAM and is less
+  useful for the real pressure points.
+- M5Paper's practical constraints are internal DRAM/IRAM pressure, render latency, watchdog safety,
+  and shared SPI arbitration between e-paper and SD rather than application-slot flash size.
+- The display is stable as black-and-white. 16-level grayscale remains a later phase because the
+  current M5Paper flush path deliberately disables Biscuit's grayscale overlay path to avoid black
+  screen corruption.
+- Touch works through virtual zones on the portrait `540x960` logical surface. The bottom strip maps
+  to Back/Confirm/Left/Right, and the right strip maps to Up/Down. The raw GT911 coordinates observed
+  on hardware are rotated into this logical surface before they enter `MappedInputManager`.
+- Deep sleep wakes correctly from the power button on the tested device and returns to the startup
+  menu. Restoring the previous activity stack after deep sleep is not implemented.
+- The Settings > File Transfer > WiFi Transfer entry must launch `CrossPointWebServerActivity` on
+  M5Paper. Launching `NetworkModeSelectionActivity` directly only returns a selected mode result to
+  the activity manager and exits back to the menu; AP creation is handled by the parent web-transfer
+  activity. The default target keeps the direct lightweight selector path for now because linking the
+  full web-transfer activity from AppsMenu overflows its OTA slot.
+- EPUB 3 `nav.xhtml` files can appear in the OPF spine without `linear="no"`. They must be excluded
+  from the reading spine after nav discovery, otherwise page turning may try to render the nav
+  document instead of the next real chapter. Reader cache lookups also reopen `book.bin` per lookup
+  so the render task and loop task cannot interleave seeks on one shared file cursor.
+
+## Stabilization Plan After First Usable Hardware Pass
+
+Status on 2026-05-17: the original M5Paper build is usable enough for real device walking tests.
+Boot, monochrome display refresh, virtual touch zones, SD card browsing, WiFi transfer, sleep/wake
+from the power button, TXT reading, and large EPUB reading have all been exercised on hardware.
+
+Stabilization policy:
+
+- Keep `m5paper` stable before re-enabling larger radio features.
+- Treat reader, SD, display, input, and sleep regressions as release blockers.
+- Keep M5Paper feature additions behind board capability flags or isolated app gates.
+- Do not optimize for `native` as a hard release gate yet. Use host tests where they are cheap for
+  pure logic such as serialization, EPUB metadata cache, path handling, and parser behavior.
+- Keep `default` building, but recognize that it is already near the OTA slot limit because it links
+  the full font set and the full Xteink application surface.
+
+Stabilization checklist:
+
+1. Commit the current known-good M5Paper state.
+2. Keep a short manual smoke log for each flashed build:
+   - boot to menu
+   - SD root and `/biscuit` browse
+   - TXT open and page turn
+   - large EPUB open, page forward/back, exit, reopen
+   - WiFi transfer join/AP path
+   - sleep, wake, and return to startup menu
+   - one simple game or utility
+3. Run build verification before each stabilization commit:
+   - `git diff --check`
+   - `pio run -e m5paper`
+   - `pio run -e default`
+   - `pio run -e slim` when touching shared code or build flags
+4. Improve diagnostics before feature expansion:
+   - keep SD open/read/write error logs with module and path
+   - keep panic dump to SD
+   - keep memory and render latency logs in development builds
+   - add targeted host tests for EPUB cache and bounded serialization
+5. Re-enable BLE only as a separate probe:
+   - start with scan-only BLE
+   - measure heap before init, after scan, after deinit
+   - verify WiFi/BLE radio handoff through `RadioManager`
+   - keep BLE HID/spam/proximity and combined sweeps disabled until scan-only is stable
+
+Immediate technical debt:
+
+- `env:native` currently tries to compile app code that depends on Arduino, FreeRTOS, BLE, and HAL
+  headers. It should either become a narrow pure-logic test target or be replaced by a dedicated
+  `native-core` target. It is useful, but not mandatory for the first M5Paper experimental firmware.
+- The M5Paper HAL is still implemented with board conditionals inside shared files. This is
+  acceptable for stabilization, but the long-term shape should split display, storage, GPIO, and
+  power backends by board.
+- `default` is ROM-constrained. The largest difference is the embedded font set, not M5Paper code.
+  Any shared web or reader feature can overflow `default` unless it is gated or size-reduced.
 
 ## Problem Frame
 
