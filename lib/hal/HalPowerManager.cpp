@@ -3,6 +3,7 @@
 #include <HalSharedSpi.h>
 #include <Logging.h>
 #include <WiFi.h>
+#include <driver/gpio.h>
 #include <esp_sleep.h>
 
 #include <cassert>
@@ -17,6 +18,10 @@ HalPowerManager powerManager;  // Singleton instance
 
 void HalPowerManager::begin() {
 #if BISCUIT_BOARD_M5PAPER
+  gpio_deep_sleep_hold_dis();
+  gpio_hold_dis(static_cast<gpio_num_t>(M5PAPER_MAIN_PWR));
+  pinMode(M5PAPER_MAIN_PWR, OUTPUT);
+  digitalWrite(M5PAPER_MAIN_PWR, HIGH);
   _batteryUseI2C = false;
 #else
   if (gpio.deviceIsX3()) {
@@ -76,6 +81,10 @@ void HalPowerManager::startDeepSleep(HalGPIO& gpio) const {
     gpio.update();
   }
   pinMode(M5PAPER_BTN_PUSH, INPUT);
+  gpio_set_direction(static_cast<gpio_num_t>(M5PAPER_MAIN_PWR), GPIO_MODE_OUTPUT);
+  gpio_set_level(static_cast<gpio_num_t>(M5PAPER_MAIN_PWR), 1);
+  gpio_hold_en(static_cast<gpio_num_t>(M5PAPER_MAIN_PWR));
+  gpio_deep_sleep_hold_en();
   {
     HalSharedSpiLock lock;
     M5.Display.sleep();

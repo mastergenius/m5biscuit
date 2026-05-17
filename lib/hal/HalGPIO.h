@@ -19,6 +19,7 @@
 #define M5PAPER_BTN_RIGHT 37
 #define M5PAPER_BTN_PUSH 38
 #define M5PAPER_BTN_LEFT 39
+#define M5PAPER_MAIN_PWR 2
 #else
 // Display SPI pins (custom pins for XteinkX4, not hardware SPI defaults)
 #define EPD_SCLK 8   // SPI Clock
