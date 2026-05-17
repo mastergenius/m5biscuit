@@ -19,6 +19,7 @@ class CalibreConnectActivity final : public Activity {
   std::unique_ptr<CrossPointWebServer> webServer;
   std::string connectedIP;
   std::string connectedSSID;
+  std::string sessionToken;
   unsigned long lastHandleClientTime = 0;
   size_t lastProgressReceived = 0;
   size_t lastProgressTotal = 0;

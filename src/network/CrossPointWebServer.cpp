@@ -16,6 +16,7 @@
 #include "SettingsList.h"
 #include "WifiCredentialStore.h"
 #include "WebDAVHandler.h"
+#include "WebSessionAuth.h"
 #include "html/FilesPageHtml.generated.h"
 #include "html/HomePageHtml.generated.h"
 #include "html/SettingsPageHtml.generated.h"
@@ -159,9 +160,24 @@ void addDisplayInfo(JsonObject display) {
 // - HomePageHtml (from html/HomePage.html)
 // - FilesPageHeaderHtml (from html/FilesPageHeader.html)
 // - FilesPageFooterHtml (from html/FilesPageFooter.html)
-CrossPointWebServer::CrossPointWebServer() {}
+CrossPointWebServer::CrossPointWebServer(const String& sessionToken) : sessionToken(sessionToken) {}
 
 CrossPointWebServer::~CrossPointWebServer() { stop(); }
+
+bool CrossPointWebServer::requireAuth() const {
+  if (!server || WebSessionAuth::isAuthorized(*server, sessionToken)) {
+    return true;
+  }
+  WebSessionAuth::sendUnauthorized(*server);
+  return false;
+}
+
+bool CrossPointWebServer::isWebSocketAuthorized(const uint8_t num) const {
+  if (sessionToken.isEmpty()) {
+    return true;
+  }
+  return num < WEBSOCKETS_SERVER_CLIENT_MAX && wsClientAuthorized[num];
+}
 
 void CrossPointWebServer::begin() {
   if (running) {
@@ -241,9 +257,10 @@ void CrossPointWebServer::begin() {
   LOG_DBG("WEB", "[MEM] Free heap after route setup: %d bytes", ESP.getFreeHeap());
 
   // Collect WebDAV headers and register handler
-  const char* davHeaders[] = {"Depth", "Destination", "Overwrite", "If", "Lock-Token", "Timeout"};
-  server->collectHeaders(davHeaders, 6);
-  server->addHandler(new WebDAVHandler());  // Note: WebDAVHandler will be deleted by WebServer when server is stopped
+  const char* headers[] = {"Depth", "Destination", "Overwrite", "If", "Lock-Token", "Timeout", "Authorization",
+                           "Cookie"};
+  server->collectHeaders(headers, sizeof(headers) / sizeof(headers[0]));
+  server->addHandler(new WebDAVHandler(sessionToken));  // WebServer owns the handler after registration.
   LOG_DBG("WEB", "WebDAV handler initialized");
 
   server->begin();
@@ -400,11 +417,13 @@ static void sendHtmlContent(WebServer* server, const char* data, size_t len) {
 }
 
 void CrossPointWebServer::handleRoot() const {
+  if (!requireAuth()) return;
   sendHtmlContent(server.get(), HomePageHtml, sizeof(HomePageHtml));
   LOG_DBG("WEB", "Served root page");
 }
 
 void CrossPointWebServer::handleJszip() const {
+  if (!requireAuth()) return;
   server->sendHeader("Content-Encoding", "gzip");
   server->send_P(200, "application/javascript", jszip_minJs, jszip_minJsCompressedSize);
   LOG_DBG("WEB", "Served jszip.min.js");
@@ -424,6 +443,8 @@ void CrossPointWebServer::handleDevice() const {
   doc["name"] = BiscuitBoard::boardName();
   doc["firmware"] = CROSSPOINT_VERSION;
   doc["board"] = BiscuitBoard::boardName();
+  doc["auth_required"] = !sessionToken.isEmpty();
+  doc["auth_user"] = WebSessionAuth::AUTH_USER;
 
   JsonObject chip = doc["chip"].to<JsonObject>();
   chip["model"] = ESP.getChipModel();
@@ -452,6 +473,8 @@ void CrossPointWebServer::handleDevice() const {
 }
 
 void CrossPointWebServer::handleStatus() const {
+  if (!requireAuth()) return;
+
   // Get correct IP based on AP vs STA mode
   const String ipAddr = currentIpAddress(apMode);
 
@@ -485,6 +508,8 @@ void CrossPointWebServer::handleStatus() const {
 }
 
 void CrossPointWebServer::handleEvents() const {
+  if (!requireAuth()) return;
+
   JsonDocument doc;
   doc["v"] = 0;
   doc["device_id"] = deviceId();
@@ -577,10 +602,13 @@ void CrossPointWebServer::scanFiles(const char* path, const std::function<void(F
 bool CrossPointWebServer::isEpubFile(const String& filename) const { return FsHelpers::hasEpubExtension(filename); }
 
 void CrossPointWebServer::handleFileList() const {
+  if (!requireAuth()) return;
   sendHtmlContent(server.get(), FilesPageHtml, sizeof(FilesPageHtml));
 }
 
 void CrossPointWebServer::handleFileListData() const {
+  if (!requireAuth()) return;
+
   // Get current path from query string (default to root)
   String currentPath = "/";
   if (server->hasArg("path")) {
@@ -631,6 +659,8 @@ void CrossPointWebServer::handleFileListData() const {
 }
 
 void CrossPointWebServer::handleDownload() const {
+  if (!requireAuth()) return;
+
   if (!server->hasArg("path")) {
     server->send(400, "text/plain", "Missing path");
     return;
@@ -751,6 +781,13 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
   const HTTPUpload& upload = server->upload();
 
   if (upload.status == UPLOAD_FILE_START) {
+    if (!WebSessionAuth::isAuthorized(*server, sessionToken)) {
+      state.success = false;
+      state.error = "Unauthorized";
+      LOG_DBG("WEB", "[UPLOAD] Rejected unauthorized upload");
+      return;
+    }
+
     // Reset watchdog - this is the critical 1% crash point
     esp_task_wdt_reset();
 
@@ -885,6 +922,8 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
 }
 
 void CrossPointWebServer::handleUploadPost(UploadState& state) const {
+  if (!requireAuth()) return;
+
   if (state.success) {
     server->send(200, "text/plain", "File uploaded successfully: " + state.fileName);
   } else {
@@ -894,6 +933,8 @@ void CrossPointWebServer::handleUploadPost(UploadState& state) const {
 }
 
 void CrossPointWebServer::handleCreateFolder() const {
+  if (!requireAuth()) return;
+
   // Get folder name from form data
   if (!server->hasArg("name")) {
     server->send(400, "text/plain", "Missing folder name");
@@ -944,6 +985,8 @@ void CrossPointWebServer::handleCreateFolder() const {
 }
 
 void CrossPointWebServer::handleRename() const {
+  if (!requireAuth()) return;
+
   if (!server->hasArg("path") || !server->hasArg("name")) {
     server->send(400, "text/plain", "Missing path or new name");
     return;
@@ -1026,6 +1069,8 @@ void CrossPointWebServer::handleRename() const {
 }
 
 void CrossPointWebServer::handleMove() const {
+  if (!requireAuth()) return;
+
   if (!server->hasArg("path") || !server->hasArg("dest")) {
     server->send(400, "text/plain", "Missing path or destination");
     return;
@@ -1119,6 +1164,8 @@ void CrossPointWebServer::handleMove() const {
 }
 
 void CrossPointWebServer::handleDelete() const {
+  if (!requireAuth()) return;
+
   // Check if 'paths' argument is provided
   if (!server->hasArg("paths")) {
     server->send(400, "text/plain", "Missing paths");
@@ -1226,16 +1273,20 @@ void CrossPointWebServer::handleDelete() const {
 }
 
 void CrossPointWebServer::handleSettingsPage() const {
+  if (!requireAuth()) return;
   sendHtmlContent(server.get(), SettingsPageHtml, sizeof(SettingsPageHtml));
   LOG_DBG("WEB", "Served settings page");
 }
 
 void CrossPointWebServer::handleWifiSetupPage() const {
+  if (!requireAuth()) return;
   sendHtmlContent(server.get(), WifiSetupPageHtml, sizeof(WifiSetupPageHtml));
   LOG_DBG("WEB", "Served WiFi setup page");
 }
 
 void CrossPointWebServer::handleGetWifiCredentials() const {
+  if (!requireAuth()) return;
+
   WIFI_STORE.loadFromFile();
 
   JsonDocument doc;
@@ -1255,6 +1306,8 @@ void CrossPointWebServer::handleGetWifiCredentials() const {
 }
 
 void CrossPointWebServer::handlePostWifiCredentials() {
+  if (!requireAuth()) return;
+
   String ssid;
   String password;
 
@@ -1303,6 +1356,8 @@ void CrossPointWebServer::handlePostWifiCredentials() {
 }
 
 void CrossPointWebServer::handleGetSettings() const {
+  if (!requireAuth()) return;
+
   const auto& settings = getSettingsList();
 
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
@@ -1386,6 +1441,8 @@ void CrossPointWebServer::handleGetSettings() const {
 }
 
 void CrossPointWebServer::handlePostSettings() {
+  if (!requireAuth()) return;
+
   if (!server->hasArg("plain")) {
     server->send(400, "text/plain", "Missing JSON body");
     return;
@@ -1469,14 +1526,19 @@ void CrossPointWebServer::wsEventCallback(uint8_t num, WStype_t type, uint8_t* p
 
 // WebSocket event handler for fast binary uploads
 // Protocol:
-//   1. Client sends TEXT message: "START:<filename>:<size>:<path>"
-//   2. Client sends BINARY messages with file data chunks
-//   3. Server sends TEXT "PROGRESS:<received>:<total>" after each chunk
-//   4. Server sends TEXT "DONE" or "ERROR:<message>" when complete
+//   1. Client sends TEXT message: "AUTH:<token>"
+//   2. Server sends TEXT "AUTH_OK"
+//   3. Client sends TEXT message: "START:<filename>:<size>:<path>"
+//   4. Client sends BINARY messages with file data chunks
+//   5. Server sends TEXT "PROGRESS:<received>:<total>" after each chunk
+//   6. Server sends TEXT "DONE" or "ERROR:<message>" when complete
 void CrossPointWebServer::onWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
   switch (type) {
     case WStype_DISCONNECTED:
       LOG_DBG("WS", "Client %u disconnected", num);
+      if (num < WEBSOCKETS_SERVER_CLIENT_MAX) {
+        wsClientAuthorized[num] = false;
+      }
       // Only clean up if this is the client that owns the active upload.
       // A new client may have already started a fresh upload before this
       // DISCONNECTED event fires (race condition on quick cancel + retry).
@@ -1487,15 +1549,38 @@ void CrossPointWebServer::onWebSocketEvent(uint8_t num, WStype_t type, uint8_t* 
 
     case WStype_CONNECTED: {
       LOG_DBG("WS", "Client %u connected", num);
+      if (num < WEBSOCKETS_SERVER_CLIENT_MAX) {
+        wsClientAuthorized[num] = sessionToken.isEmpty();
+      }
       break;
     }
 
     case WStype_TEXT: {
       // Parse control messages
       String msg = String((char*)payload);
-      LOG_DBG("WS", "Text from client %u: %s", num, msg.c_str());
+      if (msg.startsWith("AUTH:")) {
+        LOG_DBG("WS", "Text from client %u: AUTH:<redacted>", num);
+      } else {
+        LOG_DBG("WS", "Text from client %u: %s", num, msg.c_str());
+      }
+
+      if (msg.startsWith("AUTH:")) {
+        const String token = msg.substring(5);
+        if (num < WEBSOCKETS_SERVER_CLIENT_MAX && sessionToken.equalsConstantTime(token)) {
+          wsClientAuthorized[num] = true;
+          wsServer->sendTXT(num, "AUTH_OK");
+        } else {
+          wsServer->sendTXT(num, "ERROR:Unauthorized");
+        }
+        break;
+      }
 
       if (msg.startsWith("START:")) {
+        if (!isWebSocketAuthorized(num)) {
+          wsServer->sendTXT(num, "ERROR:Unauthorized");
+          break;
+        }
+
         // Reject any START while an upload is already active to prevent
         // leaking the open wsUploadFile handle (owning client re-START included)
         if (wsUploadInProgress) {

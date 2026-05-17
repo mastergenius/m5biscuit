@@ -4519,6 +4519,20 @@ function getWsUrl() {
   return `ws://${host}:${WS_PORT}/`;
 }
 
+function getCookieValue(name) {
+  return document.cookie
+    .split(';')
+    .map(part => part.trim())
+    .find(part => part.startsWith(name + '='))
+    ?.substring(name.length + 1) || '';
+}
+
+function getSessionToken() {
+  const urlToken = new URLSearchParams(window.location.search).get('token');
+  if (urlToken) return urlToken;
+  return getCookieValue('biscuit_token');
+}
+
 // Upload file via WebSocket (faster, binary protocol)
 function uploadFileWebSocket(file, onProgress, onComplete, onError) {
   return new Promise((resolve, reject) => {
@@ -4531,16 +4545,22 @@ function uploadFileWebSocket(file, onProgress, onComplete, onError) {
     ws.binaryType = 'arraybuffer';
 
     ws.onopen = function() {
-      console.log('[WS] Connected, starting upload:', file.name);
-      // Send start message: START:<filename>:<size>:<path>
-      ws.send(`START:${file.name}:${file.size}:${currentPath}`);
+      console.log('[WS] Connected, authenticating upload:', file.name);
+      const token = getSessionToken();
+      if (token) {
+        ws.send(`AUTH:${token}`);
+      } else {
+        ws.send(`START:${file.name}:${file.size}:${currentPath}`);
+      }
     };
 
     ws.onmessage = async function(event) {
       const msg = event.data;
       console.log('[WS] Message:', msg);
 
-      if (msg === 'READY') {
+      if (msg === 'AUTH_OK') {
+        ws.send(`START:${file.name}:${file.size}:${currentPath}`);
+      } else if (msg === 'READY') {
         uploadStarted = true;
         sendingChunks = true;
 

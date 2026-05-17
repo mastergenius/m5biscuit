@@ -4,6 +4,7 @@ This document describes all HTTP and WebSocket endpoints available on the Biscui
 
 - [Webserver Endpoints](#webserver-endpoints)
   - [Overview](#overview)
+  - [Session Authorization](#session-authorization)
   - [HTTP Endpoints](#http-endpoints)
     - [GET `/` - Home Page](#get----home-page)
     - [GET `/files` - File Browser Page](#get-files---file-browser-page)
@@ -31,6 +32,32 @@ The Biscuit Reader exposes a webserver for file management and device monitoring
 
 ---
 
+## Session Authorization
+
+When the File Transfer or Calibre/WebDAV activity starts, Biscuit generates a short-lived session
+token and keeps it in RAM only. The token expires when the activity exits, the device enters deep
+sleep, or the device reboots.
+
+Only `GET /api/device` is public. All file, status, settings, WiFi, WebDAV, and WebSocket upload
+operations require the current session token.
+
+Supported carriers:
+
+- Browser pairing URL: `http://<ip>/?token=<token>`, which stores a temporary `biscuit_token`
+  cookie for same-origin browser requests.
+- HTTP API and file requests: `Authorization: Bearer <token>`.
+- WebDAV clients: Basic auth with user `biscuit` and password equal to the session token.
+- WebSocket upload: send `AUTH:<token>` before `START:<filename>:<size>:<path>`.
+
+In the examples below, set `TOKEN` to the token shown on the device:
+
+```bash
+TOKEN=<session-token>
+curl -H "Authorization: Bearer $TOKEN" http://biscuit.local/api/status
+```
+
+---
+
 ## HTTP Endpoints
 
 ### GET `/` - Home Page
@@ -39,7 +66,7 @@ Serves the home page HTML interface.
 
 **Request:**
 ```bash
-curl http://biscuit.local/
+curl "http://biscuit.local/?token=$TOKEN"
 ```
 
 **Response:** HTML page (200 OK)
@@ -52,7 +79,7 @@ Serves the file browser HTML interface.
 
 **Request:**
 ```bash
-curl http://biscuit.local/files
+curl -H "Authorization: Bearer $TOKEN" http://biscuit.local/files
 ```
 
 **Response:** HTML page (200 OK)
@@ -77,6 +104,8 @@ curl http://biscuit.local/api/device
   "name": "M5Paper",
   "firmware": "0.1.0-m5paper+master",
   "board": "M5Paper",
+  "auth_required": true,
+  "auth_user": "biscuit",
   "chip": {
     "model": "ESP32-D0WDQ6-V3",
     "revision": 3,
@@ -116,7 +145,7 @@ Returns JSON with device status information.
 
 **Request:**
 ```bash
-curl http://biscuit.local/api/status
+curl -H "Authorization: Bearer $TOKEN" http://biscuit.local/api/status
 ```
 
 **Response (200 OK):**
@@ -169,7 +198,7 @@ pollable envelope that can later map to WebSocket, ESP-NOW, or a local hub.
 
 **Request:**
 ```bash
-curl http://biscuit.local/api/events
+curl -H "Authorization: Bearer $TOKEN" http://biscuit.local/api/events
 ```
 
 **Response (200 OK):**
@@ -202,10 +231,10 @@ Returns a JSON array of files and folders in the specified directory.
 **Request:**
 ```bash
 # List root directory
-curl http://biscuit.local/api/files
+curl -H "Authorization: Bearer $TOKEN" http://biscuit.local/api/files
 
 # List specific directory
-curl "http://biscuit.local/api/files?path=/Books"
+curl -H "Authorization: Bearer $TOKEN" "http://biscuit.local/api/files?path=/Books"
 ```
 
 **Query Parameters:**
@@ -243,10 +272,10 @@ Uploads a file to the SD card via multipart form data.
 **Request:**
 ```bash
 # Upload to root directory
-curl -X POST -F "file=@mybook.epub" http://biscuit.local/upload
+curl -H "Authorization: Bearer $TOKEN" -X POST -F "file=@mybook.epub" http://biscuit.local/upload
 
 # Upload to specific directory
-curl -X POST -F "file=@mybook.epub" "http://biscuit.local/upload?path=/Books"
+curl -H "Authorization: Bearer $TOKEN" -X POST -F "file=@mybook.epub" "http://biscuit.local/upload?path=/Books"
 ```
 
 **Query Parameters:**
@@ -269,6 +298,7 @@ File uploaded successfully: mybook.epub
 | 400    | `Failed to write final data to SD card`         | Error flushing final buffer |
 | 400    | `Upload aborted`                                | Client aborted the upload   |
 | 400    | `Unknown error during upload`                   | Unspecified error           |
+| 401    | `{"error":"unauthorized"}`                      | Missing or invalid token    |
 
 **Notes:**
 - Existing files with the same name will be overwritten
@@ -282,7 +312,7 @@ Creates a new folder on the SD card.
 
 **Request:**
 ```bash
-curl -X POST -d "name=NewFolder&path=/" http://biscuit.local/mkdir
+curl -H "Authorization: Bearer $TOKEN" -X POST -d "name=NewFolder&path=/" http://biscuit.local/mkdir
 ```
 
 **Form Parameters:**
@@ -315,10 +345,10 @@ Deletes a file or folder from the SD card.
 **Request:**
 ```bash
 # Delete a file
-curl -X POST -d "path=/Books/mybook.epub&type=file" http://biscuit.local/delete
+curl -H "Authorization: Bearer $TOKEN" -X POST -d "path=/Books/mybook.epub&type=file" http://biscuit.local/delete
 
 # Delete an empty folder
-curl -X POST -d "path=/OldFolder&type=folder" http://biscuit.local/delete
+curl -H "Authorization: Bearer $TOKEN" -X POST -d "path=/OldFolder&type=folder" http://biscuit.local/delete
 ```
 
 **Form Parameters:**
@@ -365,15 +395,19 @@ ws://biscuit.local:81/
 
 **Protocol:**
 
-1. **Client** sends TEXT message: `START:<filename>:<size>:<path>`
-2. **Server** responds with TEXT: `READY`
-3. **Client** sends BINARY messages with file data chunks
-4. **Server** sends TEXT progress updates: `PROGRESS:<received>:<total>`
-5. **Server** sends TEXT when complete: `DONE` or `ERROR:<message>`
+1. **Client** sends TEXT message: `AUTH:<token>`
+2. **Server** responds with TEXT: `AUTH_OK`
+3. **Client** sends TEXT message: `START:<filename>:<size>:<path>`
+4. **Server** responds with TEXT: `READY`
+5. **Client** sends BINARY messages with file data chunks
+6. **Server** sends TEXT progress updates: `PROGRESS:<received>:<total>`
+7. **Server** sends TEXT when complete: `DONE` or `ERROR:<message>`
 
 **Example Session:**
 
 ```
+Client -> "AUTH:<token>"
+Server -> "AUTH_OK"
 Client -> "START:mybook.epub:1234567:/Books"
 Server -> "READY"
 Client -> [binary chunk 1]
@@ -389,6 +423,7 @@ Server -> "DONE"
 
 | Message                           | Cause                              |
 | --------------------------------- | ---------------------------------- |
+| `ERROR:Unauthorized`              | Missing or invalid session token   |
 | `ERROR:Failed to create file`     | Cannot create file on SD card      |
 | `ERROR:Invalid START format`      | Malformed START message            |
 | `ERROR:No upload in progress`     | Binary data received without START |
@@ -400,6 +435,7 @@ Server -> "DONE"
 websocat ws://biscuit.local:81
 
 # Then type:
+AUTH:<token>
 START:mybook.epub:1234567:/Books
 # Wait for READY, then send binary data
 ```
@@ -423,6 +459,7 @@ The device can operate in two network modes:
 
 ### Access Point Mode (AP)
 - Device creates its own WiFi hotspot
+- Hotspot is WPA2-protected with a generated password shown on the device and encoded in the QR code
 - Default IP is typically `192.168.4.1`
 - `mode` field in `/api/status` returns `"AP"`
 - `rssi` field returns `0`

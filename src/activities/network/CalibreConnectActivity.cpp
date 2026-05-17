@@ -10,6 +10,7 @@
 #include "WifiSelectionActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "network/WebSessionAuth.h"
 #include "util/RadioManager.h"
 
 namespace {
@@ -23,6 +24,7 @@ void CalibreConnectActivity::onEnter() {
   state = CalibreConnectState::WIFI_SELECTION;
   connectedIP.clear();
   connectedSSID.clear();
+  sessionToken = WebSessionAuth::makeSessionToken().c_str();
   lastHandleClientTime = 0;
   lastProgressReceived = 0;
   lastProgressTotal = 0;
@@ -56,6 +58,7 @@ void CalibreConnectActivity::onExit() {
   MDNS.end();
 
   RADIO.shutdown();
+  sessionToken.clear();
 }
 
 void CalibreConnectActivity::onWifiSelectionComplete(const bool connected) {
@@ -76,7 +79,7 @@ void CalibreConnectActivity::startWebServer() {
     LOG_DBG("CAL", "mDNS started: http://%s.local/", HOSTNAME);
   }
 
-  webServer.reset(new CrossPointWebServer());
+  webServer.reset(new CrossPointWebServer(sessionToken.c_str()));
   webServer->begin();
 
   if (webServer->isRunning()) {
@@ -193,7 +196,13 @@ void CalibreConnectActivity::render(RenderLock&&) {
     renderer.drawText(SMALL_FONT_ID, metrics.contentSidePadding, y + height * 2, tr(STR_CALIBRE_INSTRUCTION_3));
     renderer.drawText(SMALL_FONT_ID, metrics.contentSidePadding, y + height * 3, tr(STR_CALIBRE_INSTRUCTION_4));
 
-    y += height * 3 + metrics.verticalSpacing * 4;
+    y += height * 4 + metrics.verticalSpacing * 2;
+    renderer.drawText(SMALL_FONT_ID, metrics.contentSidePadding, y, "WebDAV user: biscuit");
+    y += height;
+    renderer.drawText(SMALL_FONT_ID, metrics.contentSidePadding, y,
+                      (std::string("WebDAV pass: ") + sessionToken).c_str());
+
+    y += metrics.verticalSpacing * 4;
     renderer.drawText(UI_12_FONT_ID, metrics.contentSidePadding, y, tr(STR_CALIBRE_STATUS), true, EpdFontFamily::BOLD);
     y += heightText12 + metrics.verticalSpacing * 2;
 

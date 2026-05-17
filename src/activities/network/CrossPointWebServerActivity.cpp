@@ -15,12 +15,12 @@
 #include "activities/network/CalibreConnectActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "network/WebSessionAuth.h"
 #include "util/QrUtils.h"
 
 namespace {
 // AP Mode configuration
 constexpr const char* AP_SSID = "Biscuit-Reader";
-constexpr const char* AP_PASSWORD = nullptr;  // Open network for ease of use
 constexpr const char* AP_HOSTNAME = "biscuit";
 constexpr uint8_t AP_CHANNEL = 1;
 constexpr uint8_t AP_MAX_CONNECTIONS = 4;
@@ -43,6 +43,8 @@ void CrossPointWebServerActivity::onEnter() {
   isApMode = false;
   connectedIP.clear();
   connectedSSID.clear();
+  sessionToken = WebSessionAuth::makeSessionToken().c_str();
+  hotspotPassword = WebSessionAuth::makeHotspotPassword().c_str();
   lastHandleClientTime = 0;
   requestUpdate();
 
@@ -95,6 +97,8 @@ void CrossPointWebServerActivity::onExit() {
   LOG_DBG("WEBACT", "Setting WiFi mode OFF...");
   WiFi.mode(WIFI_OFF);
   delay(30);  // Allow WiFi hardware to power down
+  sessionToken.clear();
+  hotspotPassword.clear();
 
   LOG_DBG("WEBACT", "Free heap at onExit end: %d bytes", ESP.getFreeHeap());
 }
@@ -190,13 +194,7 @@ void CrossPointWebServerActivity::startAccessPoint() {
   delay(100);
 
   // Start soft AP
-  bool apStarted;
-  if (AP_PASSWORD && strlen(AP_PASSWORD) >= 8) {
-    apStarted = WiFi.softAP(AP_SSID, AP_PASSWORD, AP_CHANNEL, false, AP_MAX_CONNECTIONS);
-  } else {
-    // Open network (no password)
-    apStarted = WiFi.softAP(AP_SSID, nullptr, AP_CHANNEL, false, AP_MAX_CONNECTIONS);
-  }
+  bool apStarted = WiFi.softAP(AP_SSID, hotspotPassword.c_str(), AP_CHANNEL, false, AP_MAX_CONNECTIONS);
 
   if (!apStarted) {
     LOG_ERR("WEBACT", "ERROR: Failed to start Access Point!");
@@ -241,7 +239,7 @@ void CrossPointWebServerActivity::startWebServer() {
   LOG_DBG("WEBACT", "Starting web server...");
 
   // Create the web server instance
-  webServer.reset(new CrossPointWebServer());
+  webServer.reset(new CrossPointWebServer(sessionToken.c_str()));
   webServer->begin();
 
   if (webServer->isRunning()) {
@@ -384,14 +382,17 @@ void CrossPointWebServerActivity::renderServerRunning() const {
                       EpdFontFamily::BOLD);
     startY += height10 + metrics.verticalSpacing * 2;
 
-    // Show QR code for Wifi
-    const std::string wifiConfig = std::string("WIFI:T:nopass;S:") + connectedSSID + ";;";
+    // Show QR code for WiFi. HTTP access still requires the session token below.
+    const std::string wifiConfig =
+        std::string("WIFI:T:WPA;S:") + connectedSSID + ";P:" + hotspotPassword + ";;";
     const Rect qrBoundsWifi(metrics.contentSidePadding, startY, QR_CODE_WIDTH, QR_CODE_HEIGHT);
     QrUtils::drawQrCode(renderer, qrBoundsWifi, wifiConfig);
 
     // Show network name
     renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding + QR_CODE_WIDTH + metrics.verticalSpacing, startY + 80,
                       connectedSSID.c_str());
+    renderer.drawText(SMALL_FONT_ID, metrics.contentSidePadding + QR_CODE_WIDTH + metrics.verticalSpacing, startY + 105,
+                      (std::string("Password: ") + hotspotPassword).c_str());
 
     startY += QR_CODE_HEIGHT + 2 * metrics.verticalSpacing;
 
@@ -400,8 +401,8 @@ void CrossPointWebServerActivity::renderServerRunning() const {
                       EpdFontFamily::BOLD);
     startY += height10 + metrics.verticalSpacing * 2;
 
-    std::string hostnameUrl = std::string("http://") + AP_HOSTNAME + ".local/wifi";
-    std::string ipUrl = tr(STR_OR_HTTP_PREFIX) + connectedIP + "/wifi";
+    std::string hostnameUrl = std::string("http://") + AP_HOSTNAME + ".local/?token=" + sessionToken;
+    std::string ipUrl = tr(STR_OR_HTTP_PREFIX) + connectedIP + "/?token=" + sessionToken;
 
     // Show QR code for URL
     const Rect qrBoundsUrl(metrics.contentSidePadding, startY, QR_CODE_WIDTH, QR_CODE_HEIGHT);
@@ -423,7 +424,7 @@ void CrossPointWebServerActivity::renderServerRunning() const {
     startY += height10 + metrics.verticalSpacing * 2;
 
     // Show QR code for URL
-    std::string webInfo = "http://" + connectedIP + "/";
+    std::string webInfo = "http://" + connectedIP + "/?token=" + sessionToken;
     const Rect qrBounds((pageWidth - QR_CODE_WIDTH) / 2, startY, QR_CODE_WIDTH, QR_CODE_HEIGHT);
     QrUtils::drawQrCode(renderer, qrBounds, webInfo);
     startY += QR_CODE_HEIGHT + metrics.verticalSpacing * 2;
@@ -433,7 +434,7 @@ void CrossPointWebServerActivity::renderServerRunning() const {
     startY += height10 + 5;
 
     // Also show hostname URL
-    std::string hostnameUrl = std::string(tr(STR_OR_HTTP_PREFIX)) + AP_HOSTNAME + ".local/";
+    std::string hostnameUrl = std::string(tr(STR_OR_HTTP_PREFIX)) + AP_HOSTNAME + ".local/?token=" + sessionToken;
     renderer.drawCenteredText(SMALL_FONT_ID, startY, hostnameUrl.c_str(), true);
   }
 

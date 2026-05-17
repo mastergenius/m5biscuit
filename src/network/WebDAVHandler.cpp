@@ -6,6 +6,8 @@
 #include <Logging.h>
 #include <esp_task_wdt.h>
 
+#include "WebSessionAuth.h"
+
 namespace {
 const char* HIDDEN_ITEMS[] = {"System Volume Information", "XTCache"};
 constexpr size_t HIDDEN_ITEMS_COUNT = sizeof(HIDDEN_ITEMS) / sizeof(HIDDEN_ITEMS[0]);
@@ -47,6 +49,15 @@ bool WebDAVHandler::canRaw(WebServer& server, const String& uri) {
 void WebDAVHandler::raw(WebServer& server, const String& uri, HTTPRaw& raw) {
   (void)uri;
   if (raw.status == RAW_START) {
+    if (_putFile) _putFile.close();
+    _putPath = "";
+    _putOk = false;
+    _putExisted = false;
+
+    if (!WebSessionAuth::isAuthorized(server, _sessionToken)) {
+      return;
+    }
+
     _putPath = getRequestPath(server);
     if (isProtectedPath(_putPath)) {
       _putOk = false;
@@ -63,7 +74,6 @@ void WebDAVHandler::raw(WebServer& server, const String& uri, HTTPRaw& raw) {
       }
     }
 
-    if (_putFile) _putFile.close();
     _putExisted = Storage.exists(_putPath.c_str());
 
     if (_putExisted) {
@@ -109,14 +119,21 @@ void WebDAVHandler::raw(WebServer& server, const String& uri, HTTPRaw& raw) {
 
   } else if (raw.status == RAW_ABORTED) {
     if (_putFile) _putFile.close();
-    String tempPath = _putPath + ".davtmp";
-    Storage.remove(tempPath.c_str());
+    if (!_putPath.isEmpty()) {
+      String tempPath = _putPath + ".davtmp";
+      Storage.remove(tempPath.c_str());
+    }
     _putOk = false;
   }
 }
 
 bool WebDAVHandler::handle(WebServer& server, HTTPMethod method, const String& uri) {
   (void)uri;
+  if (!WebSessionAuth::isAuthorized(server, _sessionToken)) {
+    WebSessionAuth::sendUnauthorized(server);
+    return true;
+  }
+
   switch (method) {
     case HTTP_OPTIONS:
       handleOptions(server);

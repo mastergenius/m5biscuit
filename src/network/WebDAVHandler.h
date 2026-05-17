@@ -5,6 +5,8 @@
 
 class WebDAVHandler : public RequestHandler {
  public:
+  explicit WebDAVHandler(const String& sessionToken = "") : _sessionToken(sessionToken) {}
+
   // RequestHandler interface
   bool canHandle(WebServer& server, HTTPMethod method, const String& uri) override;
   bool canRaw(WebServer& server, const String& uri) override;
@@ -12,6 +14,8 @@ class WebDAVHandler : public RequestHandler {
   bool handle(WebServer& server, HTTPMethod method, const String& uri) override;
 
  private:
+  String _sessionToken;
+
   // PUT streaming state (raw() is called in chunks)
   FsFile _putFile;
   String _putPath;

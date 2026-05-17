@@ -188,10 +188,14 @@ For power users, you can manage files directly from your terminal using `curl` w
 ## Security Notes
 
 - The web server runs on port 80 (standard HTTP)
-- **No authentication is required** - anyone on the same network can access the interface
+- File, settings, WiFi, WebDAV, and WebSocket upload operations require a short-lived session token
+  shown on the device
+- The browser QR link includes the token and stores it as a temporary local cookie for that session
+- WebDAV uses Basic auth with user `biscuit` and the current session token as the password
+- Access point mode uses a generated WPA2 password shown on the device and encoded in the QR code
 - The web server is only accessible while the WiFi screen shows "Connected"
 - The web server automatically stops when you exit the WiFi screen
-- For security, only use on trusted private networks
+- Traffic is still plain HTTP, so use it on trusted private networks
 
 ---
 
