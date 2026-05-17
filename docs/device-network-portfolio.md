@@ -200,6 +200,23 @@ Near-term portfolio:
 6. Re-enable BLE on M5Paper as scan-only measurement, not as a full feature return.
 7. Consider Matter/Apple Home only for stable home concepts after the internal model is clear.
 
+Updated priority after the first Biscuit Link endpoint work:
+
+1. Secure the existing web server before expanding the API surface:
+   - short-lived session token for HTTP, WebDAV, and WebSocket;
+   - saved-WiFi sync as the normal path;
+   - WPA2 hotspot as bootstrap or fallback only;
+   - hotspot QR may include WiFi credentials, but HTTP access still requires the session token.
+2. Pivot the first product use case toward an offline-first M5Paper study device:
+   - Mac prepares and syncs study packs;
+   - M5Paper stores decks locally and can run reviews offline;
+   - M5Paper writes rotated review log segments;
+   - Mac later imports review logs and sends acknowledgements.
+3. Keep ESP-NOW and broader device fabric as follow-on experiments after the secure sync and study
+   data model are usable.
+
+See also: [Offline-First Study Sync](study-sync-offline-first.md).
+
 Do not pursue now:
 
 - Full Home Assistant dependency.
