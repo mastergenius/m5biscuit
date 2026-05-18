@@ -72,6 +72,7 @@
 #include "QrTotpActivity.h"
 #include "EventLoggerActivity.h"
 #include "FlashcardActivity.h"
+#include "StudyActivity.h"
 #include "CipherActivity.h"
 #include "OtpGeneratorActivity.h"
 #include "SteganographyActivity.h"
@@ -252,6 +253,7 @@ void AppsMenuActivity::loop() {
                 {"OTP Generator", "One-time pad random numbers", UIIcon::Text, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<OtpGeneratorActivity>(r, m); }},
                 AppCategoryActivity::SectionHeader("TRACKING & LOGGING"),
                 {"Event Logger", "Timestamped notes with location", UIIcon::Text, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<EventLoggerActivity>(r, m); }},
+                {"Study Packs", "Offline adaptive study packs", UIIcon::Book, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<StudyActivity>(r, m); }},
                 {"Flashcards", "Study decks from SD (CSV)", UIIcon::Book, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<FlashcardActivity>(r, m); }},
                 {"Habit Tracker", "Daily habits with streaks", UIIcon::Recent, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<HabitTrackerActivity>(r, m); }, false, []() -> bool { return Storage.exists("/biscuit/habits.dat"); }},
                 {"Automation", "Geofence triggers + scheduled tasks", UIIcon::Recent, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<AutomationActivity>(r, m); }},
@@ -474,6 +476,7 @@ void AppsMenuActivity::loop() {
               {"OTP Generator", "One-time pad random numbers", UIIcon::Text, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<OtpGeneratorActivity>(r, m); }},
               AppCategoryActivity::SectionHeader("TRACKING & LOGGING"),
               {"Event Logger", "Timestamped notes with location", UIIcon::Text, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<EventLoggerActivity>(r, m); }},
+              {"Study Packs", "Offline adaptive study packs", UIIcon::Book, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<StudyActivity>(r, m); }},
               {"Flashcards", "Study decks from SD (CSV)", UIIcon::Book, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<FlashcardActivity>(r, m); }},
               {"Habit Tracker", "Daily habits with streaks", UIIcon::Recent, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<HabitTrackerActivity>(r, m); }, false, []() -> bool { return Storage.exists("/biscuit/habits.dat"); }},
               {"Automation", "Geofence triggers + scheduled tasks", UIIcon::Recent, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<AutomationActivity>(r, m); }},

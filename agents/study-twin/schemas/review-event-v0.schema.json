@@ -33,7 +33,7 @@
       "pattern": "^[a-z0-9][a-z0-9._:-]{1,95}$"
     },
     "runtime": {
-      "enum": ["m5paper", "mac"]
+      "enum": ["m5paper", "default", "mac"]
     },
     "pack_id": {
       "$ref": "#/$defs/id"

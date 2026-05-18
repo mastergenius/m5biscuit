@@ -84,6 +84,16 @@ Validate the fixture pack:
 python3 agents/study-twin/tools/validate-pack agents/study-twin/examples/packs/fr-a1-mini
 ```
 
+Firmware runtime path:
+
+```text
+/biscuit/study/packs/<pack_id>/manifest.json
+/biscuit/study/packs/<pack_id>/concepts.jsonl
+/biscuit/study/packs/<pack_id>/episodes.jsonl
+/biscuit/study/packs/<pack_id>/rubrics.jsonl
+/biscuit/study/logs/reviews/reviews_000001.jsonl
+```
+
 ## Data Policy
 
 This repository may contain agent instructions, schemas, test fixtures, examples, and intentional

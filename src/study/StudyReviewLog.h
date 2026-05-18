@@ -2,6 +2,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
+#include <vector>
 
 class StudyReviewLog {
  public:
@@ -13,7 +15,19 @@ class StudyReviewLog {
     uint32_t sessionMs = 0;
   };
 
+  struct PackEvent {
+    const char* packId = "";
+    const char* packRevision = "";
+    const char* episodeId = "";
+    const std::vector<std::string>* conceptIds = nullptr;
+    const char* action = "";
+    uint32_t sessionMs = 0;
+    int8_t confidence = -1;
+    int8_t effort = -1;
+  };
+
   bool append(const Event& event);
+  bool appendPackEvent(const PackEvent& event);
 
   static constexpr const char* LOG_DIR = "/biscuit/study/logs/reviews";
   static constexpr const char* STATE_PATH = "/biscuit/study/logs/sync_state.json";

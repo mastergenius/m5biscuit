@@ -67,6 +67,14 @@ String deviceId() {
   return String("xteink-") + buf;
 #endif
 }
+
+const char* runtimeName() {
+#if BISCUIT_BOARD_M5PAPER
+  return "m5paper";
+#else
+  return "default";
+#endif
+}
 }  // namespace
 
 void StudyReviewLog::ensureLoaded() {
@@ -165,6 +173,73 @@ bool StudyReviewLog::append(const Event& event) {
   writeJsonString(file, event.action);
   file.print(",\"session_ms\":");
   file.print(static_cast<unsigned long>(event.sessionMs));
+  file.print(",\"clock\":\"unknown\"}\n");
+  file.flush();
+  file.close();
+
+  state.lastSeq = seq;
+  state.openEventCount++;
+  if (!saveState()) {
+    LOG_ERR(MODULE, "Could not save review sync state");
+    return false;
+  }
+  return true;
+}
+
+bool StudyReviewLog::appendPackEvent(const PackEvent& event) {
+  ensureLoaded();
+  if (!rotateIfNeeded()) {
+    return false;
+  }
+
+  char path[96];
+  segmentPath(path, sizeof(path));
+  HalFile file = Storage.open(path, O_WRITE | O_CREAT | O_APPEND);
+  if (!file) {
+    LOG_ERR(MODULE, "Could not open review log segment: %s", path);
+    return false;
+  }
+
+  const uint32_t seq = state.lastSeq + 1;
+  file.print("{\"schema\":\"biscuit.review-event.v0\",\"seq\":");
+  file.print(static_cast<unsigned long>(seq));
+  file.print(",\"segment\":");
+  file.print(static_cast<unsigned long>(state.openSegment));
+  file.print(",\"device_id\":");
+  const String id = deviceId();
+  writeJsonString(file, id.c_str());
+  file.print(",\"runtime\":");
+  writeJsonString(file, runtimeName());
+  file.print(",\"pack_id\":");
+  writeJsonString(file, event.packId);
+  if (event.packRevision && *event.packRevision) {
+    file.print(",\"pack_revision\":");
+    writeJsonString(file, event.packRevision);
+  }
+  file.print(",\"episode_id\":");
+  writeJsonString(file, event.episodeId);
+  if (event.conceptIds) {
+    file.print(",\"concept_ids\":[");
+    for (size_t i = 0; i < event.conceptIds->size(); i++) {
+      if (i > 0) {
+        file.write(',');
+      }
+      writeJsonString(file, (*event.conceptIds)[i].c_str());
+    }
+    file.write(']');
+  }
+  file.print(",\"action\":");
+  writeJsonString(file, event.action);
+  file.print(",\"session_ms\":");
+  file.print(static_cast<unsigned long>(event.sessionMs));
+  if (event.confidence >= 0) {
+    file.print(",\"confidence\":");
+    file.print(static_cast<int>(event.confidence));
+  }
+  if (event.effort >= 0) {
+    file.print(",\"effort\":");
+    file.print(static_cast<int>(event.effort));
+  }
   file.print(",\"clock\":\"unknown\"}\n");
   file.flush();
   file.close();
