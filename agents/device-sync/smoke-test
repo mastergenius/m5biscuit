@@ -1,0 +1,245 @@
+#!/usr/bin/env python3
+"""End-to-end smoke test for the local Biscuit sync host."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.request
+from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parents[1]
+sys.path.insert(0, str(SCRIPT_DIR))
+
+from biscuit_sync_common import DEFAULT_SYNC_PACK_IDS, bootstrap_signature, sync_signature  # noqa: E402
+
+
+def post(port: int, path: str, body: dict) -> dict:
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}{path}",
+        data=json.dumps(body).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=5) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def get(port: int, path: str) -> dict:
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=5) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def get_bytes(port: int, path: str) -> bytes:
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=5) as resp:
+        return resp.read()
+
+
+def get_range(port: int, path: str, range_value: str) -> tuple[int, bytes, str]:
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}{path}",
+        headers={"Range": range_value},
+        method="GET",
+    )
+    with urllib.request.urlopen(req, timeout=5) as resp:
+        return resp.status, resp.read(), resp.headers.get("Content-Range", "")
+
+
+def free_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+def run_cli(root: Path, *args: str) -> None:
+    subprocess.check_call([str(SCRIPT_DIR / "run"), "--root", str(root), *args], cwd=REPO_ROOT, stdout=subprocess.DEVNULL)
+
+
+def wait_ready(process: subprocess.Popen[str], port: int) -> None:
+    last: Exception | None = None
+    for _ in range(80):
+        if process.poll() is not None:
+            stdout, stderr = process.communicate(timeout=1)
+            raise RuntimeError(f"sync host exited early\nSTDOUT={stdout}\nSTDERR={stderr}")
+        try:
+            if get(port, "/health").get("ok"):
+                return
+        except Exception as exc:  # noqa: BLE001 - smoke retry loop
+            last = exc
+            time.sleep(0.1)
+    raise RuntimeError(f"sync host did not become ready: {last!r}")
+
+
+def main() -> int:
+    with tempfile.TemporaryDirectory(prefix="biscuit-sync-smoke-") as tmp:
+        root = Path(tmp)
+        run_cli(root, "init", "--host-name", "SmokeHost")
+        run_cli(root, "set-bootstrap-secret")
+
+        bootstrap = json.loads((root / "config" / "bootstrap.json").read_text(encoding="utf-8"))
+        port = free_port()
+        process = subprocess.Popen(
+            [str(SCRIPT_DIR / "run"), "--root", str(root), "serve", "--host", "127.0.0.1", "--port", str(port)],
+            cwd=REPO_ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            wait_ready(process, port)
+            host = get(port, "/api/v0/host")
+            assert "bootstrap" in host.get("capabilities", [])
+            assert "sync-summary-v0" in host.get("capabilities", [])
+            assert "study-pack-artifacts-v0" in host.get("capabilities", [])
+            assert "study-pack-artifacts-range-v1" in host.get("capabilities", [])
+
+            device_id = "smoke-device"
+            challenge = post(port, "/api/v0/bootstrap/challenge", {"device_id": device_id})
+            signature = bootstrap_signature(str(bootstrap["secret"]), device_id, str(challenge["nonce"]))
+            paired = post(
+                port,
+                "/api/v0/bootstrap",
+                {"auth": {"device_id": device_id, "nonce": challenge["nonce"], "signature": signature}},
+            )
+            assert paired.get("ok") is True
+            assert len(str(paired.get("secret", ""))) == 64
+
+            review_event = {
+                "schema": "biscuit.review-event.v0",
+                "seq": 1,
+                "segment": 1,
+                "device_id": device_id,
+                "runtime": "smoke",
+                "pack_id": "smoke-pack",
+                "pack_revision": "2026-05-25.smoke",
+                "episode_id": "smoke-episode",
+                "concept_ids": ["smoke.concept"],
+                "action": "shown",
+                "session_ms": 100,
+                "clock": "unknown",
+            }
+            review_event_jsonl = json.dumps(review_event, separators=(",", ":")) + "\n"
+            expected_review_event_jsonl = json.dumps(
+                review_event,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ) + "\n"
+            payload = {
+                "installed_study_packs": [
+                    {"id": "mim-trusted-with-complexity", "revision": "2026-05-24.mim.1"}
+                ],
+                "status": {"battery": 77, "firmware": "smoke"},
+                "notes": [{"note_id": "hello", "markdown": "# Hello"}],
+                "study_logs": [
+                    {
+                        "segment": "reviews.jsonl",
+                        "content": review_event_jsonl,
+                        "last_seq": 1,
+                        "sha256": hashlib.sha256(review_event_jsonl.encode("utf-8")).hexdigest(),
+                    }
+                ],
+            }
+            challenge = post(port, "/api/v0/challenge", {"device_id": device_id})
+            signature = sync_signature(str(paired["secret"]), device_id, str(challenge["nonce"]), payload)
+            synced = post(
+                port,
+                "/api/v0/sync",
+                {
+                    "auth": {"device_id": device_id, "nonce": challenge["nonce"], "signature": signature},
+                    "payload": payload,
+                },
+            )
+            assert synced.get("ok") is True
+            assert synced.get("acked", {}).get("status") is True
+            assert synced.get("summary", {}).get("accepted", {}).get("notes") == 1
+            assert synced.get("summary", {}).get("accepted", {}).get("study_logs") == 1
+            assert synced.get("summary", {}).get("accepted", {}).get("acked_study_log_seq") == 1
+            challenge = post(port, "/api/v0/challenge", {"device_id": device_id})
+            signature = sync_signature(str(paired["secret"]), device_id, str(challenge["nonce"]), payload)
+            replayed = post(
+                port,
+                "/api/v0/sync",
+                {
+                    "auth": {"device_id": device_id, "nonce": challenge["nonce"], "signature": signature},
+                    "payload": payload,
+                },
+            )
+            assert replayed.get("ok") is True
+            assert replayed.get("summary", {}).get("accepted", {}).get("study_logs") == 1
+            assert replayed.get("summary", {}).get("accepted", {}).get("acked_study_log_seq") == 1
+            imported_log = root / "inbox" / "study-logs" / device_id / "reviews.jsonl"
+            assert imported_log.read_text(encoding="utf-8") == expected_review_event_jsonl
+
+            conflict_event = dict(review_event)
+            conflict_event["action"] = "revealed"
+            conflict_jsonl = json.dumps(conflict_event, separators=(",", ":")) + "\n"
+            conflict_payload = {
+                "installed_study_packs": [],
+                "study_logs": [
+                    {
+                        "segment": "reviews.jsonl",
+                        "content": conflict_jsonl,
+                        "last_seq": 1,
+                        "sha256": hashlib.sha256(conflict_jsonl.encode("utf-8")).hexdigest(),
+                    }
+                ],
+            }
+            challenge = post(port, "/api/v0/challenge", {"device_id": device_id})
+            signature = sync_signature(str(paired["secret"]), device_id, str(challenge["nonce"]), conflict_payload)
+            conflicted = post(
+                port,
+                "/api/v0/sync",
+                {
+                    "auth": {"device_id": device_id, "nonce": challenge["nonce"], "signature": signature},
+                    "payload": conflict_payload,
+                },
+            )
+            assert conflicted.get("ok") is True
+            assert conflicted.get("summary", {}).get("accepted", {}).get("study_logs") == 0
+            assert conflicted.get("summary", {}).get("accepted", {}).get("acked_study_log_seq") == 0
+            assert imported_log.read_text(encoding="utf-8") == expected_review_event_jsonl
+            received = synced.get("received", {})
+            study_packs = received.get("study_pack_artifacts", [])
+            assert isinstance(study_packs, list)
+            assert received.get("study_pack_artifact_count") == len(study_packs)
+            assert received.get("remaining_study_pack_count") == max(0, len(DEFAULT_SYNC_PACK_IDS) - len(study_packs))
+            assert received.get("remove_study_pack_ids") == ["mim-trusted-with-complexity"]
+            assert study_packs
+            assert study_packs[0].get("pack_id") == DEFAULT_SYNC_PACK_IDS[0]
+            first_pack = study_packs[0]
+            assert {file.get("name") for file in first_pack.get("files", [])} == {
+                "manifest.json",
+                "concepts.jsonl",
+                "episodes.jsonl",
+                "rubrics.jsonl",
+            }
+            manifest_file = next(file for file in first_pack["files"] if file["name"] == "manifest.json")
+            manifest_bytes = get_bytes(port, manifest_file["url"])
+            manifest = json.loads(manifest_bytes.decode("utf-8"))
+            assert manifest["pack_id"] == DEFAULT_SYNC_PACK_IDS[0]
+            status, prefix, content_range = get_range(port, manifest_file["url"], "bytes=0-15")
+            assert status == 206
+            assert prefix == manifest_bytes[:16]
+            assert content_range.startswith("bytes 0-15/")
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+
+    print("device-sync smoke ok")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v tmux >/dev/null 2>&1; then
+  echo "tmux is not installed or not in PATH" >&2
+  exit 1
+fi
+
+repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
+session="${SESSION:-biscuit-sync}"
+command="cd '$repo_root' && HOST='${HOST:-0.0.0.0}' PORT='${PORT:-8787}' ./agents/device-sync/dev-server"
+
+if [[ -t 0 && -t 1 ]]; then
+  exec tmux new-session -A -s "$session" "$command"
+fi
+
+if tmux has-session -t "$session" 2>/dev/null; then
+  echo "tmux session already running: $session"
+  echo "attach with: tmux attach -t $session"
+  exit 0
+fi
+
+tmux new-session -d -s "$session" "$command"
+echo "started detached tmux session: $session"
+echo "attach with: tmux attach -t $session"

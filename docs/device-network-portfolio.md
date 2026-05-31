@@ -214,10 +214,17 @@ Updated priority after the first Biscuit Link endpoint work:
    - M5Paper writes rotated review log segments;
    - Mac digital twin later imports review logs, updates the learner/concept model, and sends
      acknowledgements.
-3. Keep ESP-NOW and broader device fabric as follow-on experiments after the secure sync and study
+3. Add a distraction-free writing path on M5Paper:
+   - BLE HID keyboard support starts as a measured probe, because current BLE code mostly implements
+     device-as-keyboard behavior rather than external-keyboard input;
+   - notes are local-first Markdown/UTF-8 artifacts stored on SD;
+   - one-button sync sends notes and study logs to the Mac agent environment after one-time pairing;
+   - the Mac host does the heavier thinking-twin work: indexing, linking, generation, and editing.
+4. Keep ESP-NOW and broader device fabric as follow-on experiments after the secure sync and study
    data model are usable.
 
 See also: [Offline-First Study Sync](study-sync-offline-first.md).
+See also: [Distraction-Free Thinking Machine](distraction-free-thinking-machine.md).
 See also: [Study Twin Agent Workspace](../agents/study-twin/README.md).
 
 Do not pursue now:
@@ -274,11 +281,15 @@ Example envelope, intentionally transport-neutral:
 ## Next Actions
 
 1. Keep committing each M5Paper known-good stabilization point after hardware smoke testing.
-2. Build a small firmware-side StudyPack reader that can stream `manifest.json`, `concepts.jsonl`,
-   `episodes.jsonl`, and `rubrics.jsonl` without large heap spikes.
-3. Add a minimal M5Paper `StudyActivity` for `brief`, `retrieve`, `reveal`, and self-rating.
-4. Add study sync endpoints for StudyPack listing/upload and rotated review-log download/ack.
-5. Add a manual protocol smoke test using a browser or `curl` against M5Paper.
-6. Add a CLI-first Mac study helper in the repo-committed digital twin workspace.
+2. Keep the current StudyPack reader and `StudyActivity` stable: pack listing, choice episodes,
+   progress save/restore, and ReviewEvent logging are implemented and should stay covered by smoke
+   tests.
+3. Replace the current generic file-transfer sync helper with narrower `/api/study/*` endpoints for
+   pack list/upload, review-log download, log ack, and Mac-provided time.
+4. Add a manual protocol smoke test using browser/`curl` plus `agents/study-twin/tools/device-sync`.
+5. Continue the CLI-first Mac study helper: pull logs, import learner-state, regenerate generated
+   packs, validate, and push the current pack set.
+6. Harden the transfer surface for untrusted networks: path allowlists, method restrictions, rate/size
+   limits, and optional StudyPack integrity checks.
 7. Create a separate ESP-NOW lab target or sample app outside the stable M5Paper reader path.
 8. Revisit BLE after the scan-only memory/radio probe is measured.

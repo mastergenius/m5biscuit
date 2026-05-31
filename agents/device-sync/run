@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+
+if ! command -v uv >/dev/null 2>&1; then
+  echo "uv is not installed or not in PATH" >&2
+  exit 1
+fi
+
+export UV_CACHE_DIR="${UV_CACHE_DIR:-$script_dir/.uv-cache}"
+export UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-$script_dir/.venv}"
+export UV_LINK_MODE="${UV_LINK_MODE:-copy}"
+
+exec uv run --project "$script_dir" python "$script_dir/biscuit-sync" "$@"

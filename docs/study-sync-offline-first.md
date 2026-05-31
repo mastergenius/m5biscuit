@@ -39,6 +39,11 @@ The planned Mac app is a runtime client over the same StudyPack and ReviewEvent 
 separate learning model. It may offer richer input, graph views, editing, and AI-assisted assessment,
 but it must remain protocol-compatible with the M5Paper runtime.
 
+The same trust and transport substrate should also support non-study payloads, especially local
+notes from the distraction-free thinking-machine mode. Study sync remains a domain-specific payload;
+pairing, host discovery, short-lived session derivation, acknowledgements, and failure handling
+should be shared where practical. See [Distraction-Free Thinking Machine](distraction-free-thinking-machine.md).
+
 ## Network Model
 
 Default sync should use saved WiFi credentials already stored on the M5Paper. Hotspot mode is only a
@@ -76,6 +81,48 @@ Recommended carrier:
 - API requests: `Authorization: Bearer <token>`;
 - browser pairing URL: `http://<ip>/?token=<token>`;
 - WebDAV compatibility: Basic auth with user `biscuit` and password equal to the session token.
+
+## Untrusted Network Hardening
+
+The current security model is acceptable for an explicit short-lived transfer session on a trusted
+home LAN. It should not be treated as safe for a cafe, hotel, guest WiFi, or any network where other
+clients may sniff or actively attack local traffic. HTTP is not encrypted, and compatibility modes
+such as WebDAV Basic auth expose the session token to anyone who can observe the network.
+
+Before using Biscuit sync as a normal workflow on untrusted networks, add a separate hardened mode:
+
+- make the transfer screen distinguish `Trusted LAN` from `Untrusted / Guest Network`;
+- prefer device-created WPA2 hotspot for untrusted networks, even when saved WiFi credentials exist;
+- reduce public discovery in hardened mode to a redacted identity response, or require the QR token
+  for every endpoint including `/api/device`;
+- stop carrying the long-lived bearer secret in browser-visible URLs after pairing: use the QR URL
+  only to perform a one-time exchange, then immediately replace it with a RAM-only session cookie or
+  bearer token and remove the query token from browser history;
+- bind a session to the first authenticated client where practical, and reject or require re-pairing
+  for concurrent clients;
+- rate-limit failed token, Basic auth, and WebSocket auth attempts;
+- add a short idle timeout for transfer sessions, plus an explicit on-device "Stop sharing" action;
+- gate WebDAV behind an explicit compatibility toggle in hardened mode because Basic auth over HTTP
+  is easy to capture;
+- enforce one path normalization and protected-path policy for HTTP upload/download/delete,
+  WebSocket upload, WebDAV, and future Study APIs;
+- narrow Study sync endpoints to `/biscuit/study/...` instead of giving the Mac helper arbitrary SD
+  write access when only study content is being synced;
+- add CSRF protection for browser-cookie write requests, or require bearer headers for writes even
+  after browser pairing;
+- sign generated StudyPacks or at least verify manifest hashes before activation, so interrupted or
+  tampered uploads cannot become the active learning material;
+- keep saved WiFi credentials write-only/redacted through the web API and never return plaintext
+  credentials after provisioning;
+- optionally investigate HTTPS or a small Noise/PAKE-style encrypted pairing channel, but treat it
+  as a measured feature because TLS memory and certificate UX may be costly on ESP32.
+
+Acceptance test for the current short-lived model:
+
+1. Start File Transfer and confirm old unauthenticated requests return `401`.
+2. Confirm the QR/session token works for authorized requests.
+3. Exit File Transfer on the device.
+4. Confirm the old IP/token no longer reaches protected endpoints.
 
 ## Study Pack Layout
 
@@ -162,7 +209,22 @@ with import time or infer approximate wall-clock ranges.
 
 ## Sync API Shape
 
-Initial HTTP endpoints can stay simple:
+Current v0 uses a hybrid session-token protected API. The Mac helper still uploads StudyPack files
+with the generic `/mkdir` and `/upload` endpoints, because that path is already proven for directory
+trees. For readback and sync state it now prefers narrower Study endpoints:
+
+- `GET /api/study/packs`;
+- `GET /api/study/logs`;
+- `GET /api/study/logs/<segment>`;
+- `POST /api/study/logs/ack`;
+- `POST /api/study/time`.
+
+If these endpoints are missing on older firmware, the helper falls back to the generic file API for
+pack listing and log download. The remaining hardening pass is to replace generic StudyPack writes
+with a dedicated pack upload/replace endpoint so study sync no longer needs arbitrary SD-card write
+access.
+
+Target HTTP endpoints can stay simple:
 
 - `GET /api/study/packs` - list installed StudyPacks and revisions;
 - `POST /api/study/packs/<pack_id>` - upload or replace a StudyPack;
@@ -174,28 +236,41 @@ Initial HTTP endpoints can stay simple:
 WebSocket is useful for live sync progress, preview, and diagnostics, but the device must not depend
 on WebSocket for normal offline study.
 
+Longer-term seamless sync should move the normal path from QR-driven Mac pull to one-button,
+device-initiated sync with a paired Mac host. The existing File Transfer token model should remain
+as a fallback and recovery path, not the daily capture workflow.
+
 ## Implementation Order
 
-1. Add session auth and WPA hotspot fallback to the existing web server.
-2. Add a StudyPack v0 document schema and validation helpers.
-3. Add rotated review log storage with sequence-based sync state.
-4. Build a minimal M5Paper StudyActivity using local StudyPacks and local logs.
-5. Add sync endpoints for StudyPack upload, log download, and ack.
-6. Add the repo-committed Mac digital twin agent workspace as the reference generator/sync owner.
-7. Build the Mac helper first, then the Mac app after the file/API contracts are stable enough to
+1. Done: add session auth and WPA hotspot fallback to the existing web server.
+2. Done: add a StudyPack v0 document schema and validation helpers.
+3. Done: add rotated review log storage with sequence-based sync state.
+4. Done: build a minimal M5Paper StudyActivity using local StudyPacks and local logs.
+5. Done for v0: add a CLI helper over the generic file API for StudyPack upload and log download.
+6. Done for v0: add dedicated readback/state endpoints for StudyPack listing, log download, ack,
+   and Mac-provided time sync.
+7. In progress: add the repo-committed Mac digital twin agent workspace as the reference generator/sync owner.
+8. Next: add dedicated StudyPack upload/replace and retention endpoints, then build the Mac app after
+   the file/API contracts are stable enough to
    test manually.
 
 ## Implementation Status
 
 - Session-token protected WiFi transfer is implemented for HTTP, WebDAV, and WebSocket upload.
 - Saved-WiFi is the normal transfer path; WPA2 hotspot mode is available as bootstrap/fallback.
-- The legacy CSV `Flashcards` app now writes offline review events to rotated JSONL segments under
-  `/biscuit/study/logs/reviews/`.
+- M5Paper has a local StudyPack runtime that lists packs from `/biscuit/study/packs`, executes
+  brief/retrieve/choice episodes offline, saves per-pack progress, and appends ReviewEvent v0 records.
+- The legacy CSV `Flashcards` app writes rotated JSONL segments under `/biscuit/study/logs/reviews/`,
+  but still uses its older event shape; current Mac import tooling intentionally ignores those records.
 - Review ordering is sequence-based. Segment names are monotonic (`reviews_000001.jsonl`) and state
-  is tracked in `/biscuit/study/logs/sync_state.json`; wall-clock time is explicitly marked
-  `unknown` until a trusted Mac/NTP time source is added.
+  is tracked in `/biscuit/study/logs/sync_state.json`. Wall-clock time is optional and can be supplied
+  by the Mac through `/api/study/time`; event ordering still depends on sequence numbers.
+- The Study sync API now exposes pack listing, log segment listing/download, `acked_seq`, and Mac
+  time sync. StudyPack upload still uses generic file-transfer endpoints until the dedicated upload
+  path is added.
 - The approved target architecture is no longer "flashcards on M5Paper". It is a local-first
   adaptive learning loop: Mac digital twin agent generates StudyPacks, M5Paper/Mac app execute
   episodes, review logs return to the twin, and the twin generates the next step.
-- StudyPack v0 and ReviewEvent v0 schemas now live under `agents/study-twin/schemas/`, with a
-  French A1 fixture pack and a standard-library validator at `agents/study-twin/tools/validate-pack`.
+- StudyPack v0 and ReviewEvent v0 schemas now live under `agents/study-twin/schemas/`, with local
+  course sources, manual/generated packs, a standard-library validator, a log importer, a deterministic
+  pack compiler, and a `prepare-next` orchestration helper under `agents/study-twin/tools/`.

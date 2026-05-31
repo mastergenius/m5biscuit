@@ -1,0 +1,9 @@
+config/*.json
+state/*.json
+.venv/
+.uv-cache/
+inbox/**/*.json
+inbox/**/*.jsonl
+inbox/**/*.md
+inbox/**/*.txt
+inbox/**/*.log

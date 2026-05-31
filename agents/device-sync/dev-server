@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+repo_root="$(cd "$script_dir/../.." && pwd)"
+
+cd "$repo_root"
+
+host="${HOST:-0.0.0.0}"
+port="${PORT:-8787}"
+
+set +e
+python3 - "$host" "$port" <<'PY'
+import json
+import socket
+import sys
+import urllib.error
+import urllib.request
+
+host = sys.argv[1]
+port = int(sys.argv[2])
+probe_host = "127.0.0.1" if host in {"0.0.0.0", "::"} else host
+
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+    sock.settimeout(0.25)
+    busy = sock.connect_ex((probe_host, port)) == 0
+
+if not busy:
+    raise SystemExit(0)
+
+try:
+    with urllib.request.urlopen(f"http://{probe_host}:{port}/health", timeout=1) as resp:
+        health = json.loads(resp.read().decode("utf-8"))
+except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
+    print(f"port {port} is already in use on {probe_host}, but it is not a Biscuit sync host: {exc}", file=sys.stderr)
+    print(f"use another port: PORT=8790 agents/device-sync/dev-server", file=sys.stderr)
+    raise SystemExit(1)
+
+if health.get("ok") and health.get("schema") == "biscuit.sync-host.v0":
+    try:
+        with urllib.request.urlopen(f"http://{probe_host}:{port}/api/v0/host", timeout=1) as resp:
+            host_info = json.loads(resp.read().decode("utf-8"))
+    except (OSError, urllib.error.URLError, json.JSONDecodeError):
+        host_info = {}
+    capabilities = host_info.get("capabilities", [])
+    print(f"Biscuit sync host is already running on http://{probe_host}:{port}")
+    if "bootstrap" not in capabilities:
+        print("warning: running host does not advertise bootstrap; stop the old process and restart dev-server", file=sys.stderr)
+    print(f"stop it with: lsof -nP -iTCP:{port} -sTCP:LISTEN")
+    print(f"or use another port: PORT=8790 agents/device-sync/dev-server")
+    raise SystemExit(42)
+
+print(f"port {port} is already in use on {probe_host}", file=sys.stderr)
+print(f"use another port: PORT=8790 agents/device-sync/dev-server", file=sys.stderr)
+raise SystemExit(1)
+PY
+preflight_status=$?
+set -e
+
+if [[ "$preflight_status" -eq 42 ]]; then
+  exit 0
+fi
+if [[ "$preflight_status" -ne 0 ]]; then
+  exit "$preflight_status"
+fi
+
+exec "$script_dir/run" serve \
+  --host "$host" \
+  --port "$port" \
+  --advertise \
+  --debug \
+  --reload
