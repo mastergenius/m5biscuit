@@ -1,0 +1,46 @@
+{
+  "schema": "biscuit.study-pack.v0",
+  "pack_id": "fpf-management-drills",
+  "title": "FPF: управленческие drills для инженера",
+  "description": "Практические упражнения без зубрежки терминов: framing, done, метрики, решения, инциденты, портфель и offline-first инварианты.",
+  "revision": "2026-05-18.1",
+  "language": "ru",
+  "entry_episode_id": "fpf-mgmt-brief-001",
+  "generator": {
+    "id": "study-twin-seed",
+    "version": "0.1.0",
+    "policy": "manual-useful-prototype"
+  },
+  "files": {
+    "concepts": "concepts.jsonl",
+    "episodes": "episodes.jsonl",
+    "rubrics": "rubrics.jsonl",
+    "assets_dir": "assets"
+  },
+  "counts": {
+    "concepts": 7,
+    "episodes": 8,
+    "rubrics": 3
+  },
+  "constraints": {
+    "max_pack_bytes": 524288,
+    "max_prompt_chars": 900,
+    "max_reveal_chars": 1200,
+    "max_rubric_chars": 1200
+  },
+  "runtime_targets": ["m5paper", "mac"],
+  "sources": [
+    {
+      "id": "course-fpf-practical-thinking",
+      "type": "manual",
+      "title": "Course source: fpf-practical-thinking",
+      "citation": "agents/study-twin/courses/fpf-practical-thinking/"
+    },
+    {
+      "id": "haft-fpf-search-2026-05-18",
+      "type": "note",
+      "title": "Локальная выборка haft fpf по problem typing, rivalry, weakest link, decisions",
+      "citation": "haft fpf search: problem typing, candidate rivalry, weakest link, Pareto front, decision record, invariants, predictions."
+    }
+  ]
+}

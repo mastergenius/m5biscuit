@@ -1,0 +1,4 @@
+{"id":"mim-firefighting-method-work.c.agent","label":"Агент","kind":"concept","summary":"Агент действует по методу, тратит ресурсы и меняет системы.","tags":["mim","mac-first"]}
+{"id":"mim-firefighting-method-work.c.method","label":"Метод агента","kind":"concept","summary":"Метод задает способ работы; он может быть передан, улучшен или заменен.","tags":["mim","mac-first"]}
+{"id":"mim-firefighting-method-work.c.work","label":"Работа","kind":"concept","summary":"Работа — конкретное выполнение, которое переводит объекты в другие состояния.","tags":["mim","mac-first"]}
+{"id":"mim-firefighting-method-work.c.delegate","label":"Делегирование","kind":"concept","summary":"Делегирование передает не только задачу, но и ожидания к методу и проверкам.","tags":["mim","mac-first"]}

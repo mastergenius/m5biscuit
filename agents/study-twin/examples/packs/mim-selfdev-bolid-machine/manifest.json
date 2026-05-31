@@ -1,0 +1,59 @@
+{
+  "schema": "biscuit.study-pack.v0",
+  "pack_id": "mim-selfdev-bolid-machine",
+  "title": "МИМ ЛР: Болид и Машина",
+  "description": "Плотная ветка про Пилота, Машину, экзотело, экзокортекс, метод как runtime и обратную связь Болида.",
+  "revision": "2026-05-28.mim.1",
+  "language": "ru",
+  "entry_episode_id": "mim-selfdev-bolid-machine.e01",
+  "generator": {
+    "id": "mim-selfdev-guide1-generator",
+    "version": "2026-05-28",
+    "policy": "dense propagation calibration routing"
+  },
+  "files": {
+    "concepts": "concepts.jsonl",
+    "episodes": "episodes.jsonl",
+    "rubrics": "rubrics.jsonl"
+  },
+  "counts": {
+    "concepts": 8,
+    "episodes": 12,
+    "rubrics": 2
+  },
+  "constraints": {
+    "max_prompt_chars": 900,
+    "max_reveal_chars": 1200,
+    "max_jsonl_line_bytes": 2200
+  },
+  "runtime_targets": [
+    "m5paper",
+    "mac"
+  ],
+  "sources": [
+    {
+      "id": "src.mim-guide1.concepts",
+      "type": "note",
+      "title": "Guide 1 concepts",
+      "citation": "/Users/geni/.gemini/antigravity-cli/brain/c3f630bc-192b-4a2d-b98e-7def2c1f00ba/guide_1_concepts.md"
+    },
+    {
+      "id": "src.mim-guide1.conclusions",
+      "type": "note",
+      "title": "Guide 1 conclusions",
+      "citation": "/Users/geni/.gemini/antigravity-cli/brain/c3f630bc-192b-4a2d-b98e-7def2c1f00ba/guide_1_conclusions.md"
+    },
+    {
+      "id": "src.mim-guide1.exercises",
+      "type": "note",
+      "title": "Guide 1 exercises",
+      "citation": "/Users/geni/.gemini/antigravity-cli/brain/c3f630bc-192b-4a2d-b98e-7def2c1f00ba/guide_1_exercises.md"
+    },
+    {
+      "id": "src.mim-guide1.templates",
+      "type": "note",
+      "title": "Guide 1 templates and audits",
+      "citation": "/Users/geni/.gemini/antigravity-cli/brain/c3f630bc-192b-4a2d-b98e-7def2c1f00ba/guide_1_templates.md"
+    }
+  ]
+}

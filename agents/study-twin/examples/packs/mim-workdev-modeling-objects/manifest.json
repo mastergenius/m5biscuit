@@ -1,0 +1,53 @@
+{
+  "schema": "biscuit.study-pack.v0",
+  "pack_id": "mim-workdev-modeling-objects",
+  "title": "МИМ РР: моделировать объекты",
+  "description": "Плотная ветка про модель, моделируемый объект, описание, свойства, действия, создателей и ситуацию использования.",
+  "revision": "2026-05-28.mim.1",
+  "language": "ru",
+  "entry_episode_id": "mim-workdev-modeling-objects.e01",
+  "generator": {
+    "id": "mim-workdev-modeling-generator",
+    "version": "2026-05-28",
+    "policy": "dense modeling propagation calibration routing"
+  },
+  "files": {
+    "concepts": "concepts.jsonl",
+    "episodes": "episodes.jsonl",
+    "rubrics": "rubrics.jsonl"
+  },
+  "counts": {
+    "concepts": 9,
+    "episodes": 12,
+    "rubrics": 2
+  },
+  "constraints": {
+    "max_prompt_chars": 900,
+    "max_reveal_chars": 1200,
+    "max_jsonl_line_bytes": 2200
+  },
+  "runtime_targets": [
+    "m5paper",
+    "mac"
+  ],
+  "sources": [
+    {
+      "id": "src.mim.modeling.thinking",
+      "type": "note",
+      "title": "Моделирование: мышление и модели",
+      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/modeling-1/basics-of-modeling/thinking-and-modeling.md"
+    },
+    {
+      "id": "src.mim.modeling.product-use",
+      "type": "note",
+      "title": "Моделирование: продукт и использование",
+      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/modeling-1/basics-of-modeling/what-are-we-modeling-the-product-and-its-use.md"
+    },
+    {
+      "id": "src.mim.systems.system-of-interest-errors",
+      "type": "note",
+      "title": "Ошибки выявления целевой системы",
+      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/systems-modeling/system-of-interest-and-its-supersystem/common-mistakes-in-identifying-the-system-of-interest.md"
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "schema": "biscuit.study-pack.v0",
+  "pack_id": "fr-a1-haircut-service-articles",
+  "title": "Французский A1: стрижка и сервис",
+  "description": "Мини-статьи и active recall для записи на стрижку, общения в процессе и сборки простых бытовых фраз.",
+  "revision": "2026-05-18.1",
+  "language": "ru",
+  "entry_episode_id": "fr-hair-art-001",
+  "generator": {
+    "id": "study-twin-seed",
+    "version": "0.1.0",
+    "policy": "manual-useful-prototype"
+  },
+  "files": {
+    "concepts": "concepts.jsonl",
+    "episodes": "episodes.jsonl",
+    "rubrics": "rubrics.jsonl",
+    "assets_dir": "assets"
+  },
+  "counts": {
+    "concepts": 7,
+    "episodes": 8,
+    "rubrics": 4
+  },
+  "constraints": {
+    "max_pack_bytes": 524288,
+    "max_prompt_chars": 900,
+    "max_reveal_chars": 1200,
+    "max_rubric_chars": 1200
+  },
+  "runtime_targets": ["m5paper", "mac"],
+  "sources": [
+    {
+      "id": "course-fr-practical-service",
+      "type": "manual",
+      "title": "Course source: fr-practical-service",
+      "citation": "agents/study-twin/courses/fr-practical-service/"
+    }
+  ]
+}

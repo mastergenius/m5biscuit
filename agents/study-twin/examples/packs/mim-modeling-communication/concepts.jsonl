@@ -1,0 +1,4 @@
+{"id":"mim-modeling-communication.c.epistemic","label":"Эпистемическое состояние","kind":"concept","summary":"В коммуникации важно, что знает, предполагает и не видит другой агент.","tags":["mim","mac-first"]}
+{"id":"mim-modeling-communication.c.argument","label":"Аргумент","kind":"concept","summary":"Аргумент связывает модель, наблюдение и вывод, а не только усиливает позицию.","tags":["mim","mac-first"]}
+{"id":"mim-modeling-communication.c.role-strategy","label":"Ролевая стратегия","kind":"concept","summary":"Лидерство учитывает интересы ролей и подбирает язык модели.","tags":["mim","mac-first"]}
+{"id":"mim-modeling-communication.c.scarcity","label":"Дефицит аргументов","kind":"concept","summary":"Когда аргументов мало, нужно управлять неопределенностью, а не имитировать уверенность.","tags":["mim","mac-first"]}

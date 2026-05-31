@@ -1,0 +1,7 @@
+{"id":"fpf.mgmt.frame","label":"Рабочий frame","kind":"skill","summary":"Короткая рамка задачи: сигнал, область, вне области, готовность, риски.","tags":["fpf","management"]}
+{"id":"fpf.mgmt.done","label":"Definition of done","kind":"skill","summary":"Готовность формулируется как проверяемое изменение, а не как список потраченных действий.","tags":["fpf","verification"]}
+{"id":"fpf.mgmt.metric","label":"Роль метрики","kind":"concept","summary":"Метрика должна быть ограничением, целью или наблюдением; иначе она начинает управлять скрыто.","tags":["fpf","metric"]}
+{"id":"fpf.mgmt.decision","label":"Решение с памятью","kind":"skill","summary":"Решение фиксирует выбор, почему, инварианты, откат и что потом проверить.","tags":["fpf","decision"]}
+{"id":"fpf.mgmt.incident","label":"Разбор инцидента","kind":"skill","summary":"Инцидент разбирается через наблюдения, конкурирующие причины и дешевую проверку, а не через поиск виноватого.","tags":["fpf","debugging"]}
+{"id":"fpf.mgmt.portfolio","label":"Портфель вариантов","kind":"concept","summary":"При trade-off полезно держать несколько недоминируемых вариантов до выбора по контексту.","tags":["fpf","planning"]}
+{"id":"fpf.mgmt.invariant","label":"Инвариант продукта","kind":"concept","summary":"Инвариант - условие, которое нельзя ломать при улучшениях; нарушение требует отката или пересмотра.","tags":["fpf","architecture"]}

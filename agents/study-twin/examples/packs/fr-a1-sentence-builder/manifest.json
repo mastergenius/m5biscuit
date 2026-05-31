@@ -1,0 +1,40 @@
+{
+  "schema": "biscuit.study-pack.v0",
+  "pack_id": "fr-a1-sentence-builder",
+  "title": "Французский A1: конструктор фраз",
+  "description": "Практические паттерны сборки простых предложений для бытового общения: хочу, могу, надо, вопрос, отрицание, время и место.",
+  "revision": "2026-05-18.1",
+  "language": "ru",
+  "entry_episode_id": "fr-builder-art-001",
+  "generator": {
+    "id": "study-twin-seed",
+    "version": "0.1.0",
+    "policy": "manual-useful-prototype"
+  },
+  "files": {
+    "concepts": "concepts.jsonl",
+    "episodes": "episodes.jsonl",
+    "rubrics": "rubrics.jsonl",
+    "assets_dir": "assets"
+  },
+  "counts": {
+    "concepts": 7,
+    "episodes": 9,
+    "rubrics": 4
+  },
+  "constraints": {
+    "max_pack_bytes": 524288,
+    "max_prompt_chars": 900,
+    "max_reveal_chars": 1200,
+    "max_rubric_chars": 1200
+  },
+  "runtime_targets": ["m5paper", "mac"],
+  "sources": [
+    {
+      "id": "course-fr-practical-service",
+      "type": "manual",
+      "title": "Course source: fr-practical-service",
+      "citation": "agents/study-twin/courses/fr-practical-service/"
+    }
+  ]
+}

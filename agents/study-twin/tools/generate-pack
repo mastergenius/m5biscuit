@@ -1,0 +1,645 @@
+#!/usr/bin/env python3
+"""Compile a course source tree into a disposable StudyPack v0.
+
+This is a deterministic seed compiler, not the future adaptive Mac-side agent.
+It converts `study_item` blocks from course assessment Markdown into a runtime
+pack so the course-source -> StudyPack path can be tested end to end.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import shutil
+import sys
+from dataclasses import dataclass
+from datetime import date
+from pathlib import Path
+from typing import Any
+
+
+ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{1,95}$")
+FENCE_RE = re.compile(r"```(?:yaml|yml)\n(.*?)\n```", re.DOTALL)
+DEFAULT_LIMITS = {
+    "max_pack_bytes": 512 * 1024,
+    "max_prompt_chars": 900,
+    "max_reveal_chars": 1200,
+    "max_rubric_chars": 1200,
+    "max_jsonl_line_bytes": 2200,
+}
+SIGNAL_PRIORITY = {
+    "repair": 0,
+    "reduce_load": 1,
+    "near_transfer": 2,
+    "stabilize_then_stretch": 3,
+    "increase_transfer": 4,
+    "observe": 5,
+    "insufficient_evidence": 6,
+}
+
+
+class GenerationError(Exception):
+    pass
+
+
+@dataclass(frozen=True)
+class SourceConcept:
+    id: str
+    label: str
+    kind: str
+    summary: str
+    tags: list[str]
+
+
+def stable_id(value: str, fallback: str) -> str:
+    value = value.strip().lower()
+    value = re.sub(r"[^a-z0-9._-]+", "-", value)
+    value = re.sub(r"-+", "-", value).strip("-._")
+    if not ID_RE.match(value):
+        return fallback
+    return value[:96]
+
+
+def strip_scalar(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1]
+    return value
+
+
+def parse_yaml_value(value: str) -> Any:
+    value = strip_scalar(value)
+    if value in {"true", "false"}:
+        return value == "true"
+    if re.fullmatch(r"-?\d+", value):
+        try:
+            return int(value)
+        except ValueError:
+            return value
+    return value
+
+
+def preprocess_yaml_lines(text: str) -> list[tuple[int, str]]:
+    lines: list[tuple[int, str]] = []
+    for raw in text.splitlines():
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        indent = len(raw) - len(raw.lstrip(" "))
+        lines.append((indent, raw.strip()))
+    return lines
+
+
+def parse_yaml_subset(text: str) -> Any:
+    lines = preprocess_yaml_lines(text)
+    value, index = parse_yaml_block(lines, 0, 0)
+    if index < len(lines):
+        raise GenerationError(f"could not parse YAML near: {lines[index][1]}")
+    return value
+
+
+def parse_yaml_block(lines: list[tuple[int, str]], index: int, indent: int) -> tuple[Any, int]:
+    if index >= len(lines):
+        return {}, index
+    if lines[index][0] < indent:
+        return {}, index
+    if lines[index][1].startswith("- "):
+        return parse_yaml_list(lines, index, indent)
+    return parse_yaml_map(lines, index, indent)
+
+
+def parse_yaml_map(lines: list[tuple[int, str]], index: int, indent: int) -> tuple[dict[str, Any], int]:
+    out: dict[str, Any] = {}
+    while index < len(lines):
+        line_indent, content = lines[index]
+        if line_indent < indent:
+            break
+        if line_indent > indent:
+            raise GenerationError(f"unexpected indentation near: {content}")
+        if content.startswith("- "):
+            break
+        if ":" not in content:
+            raise GenerationError(f"expected key/value line near: {content}")
+
+        key, raw_value = content.split(":", 1)
+        key = key.strip()
+        raw_value = raw_value.strip()
+        index += 1
+        if raw_value:
+            out[key] = parse_yaml_value(raw_value)
+            continue
+
+        if index < len(lines) and lines[index][0] > line_indent:
+            out[key], index = parse_yaml_block(lines, index, lines[index][0])
+        else:
+            out[key] = None
+    return out, index
+
+
+def parse_yaml_list(lines: list[tuple[int, str]], index: int, indent: int) -> tuple[list[Any], int]:
+    out: list[Any] = []
+    while index < len(lines):
+        line_indent, content = lines[index]
+        if line_indent < indent:
+            break
+        if line_indent != indent or not content.startswith("- "):
+            break
+
+        item_text = content[2:].strip()
+        index += 1
+        if not item_text:
+            if index < len(lines) and lines[index][0] > line_indent:
+                item, index = parse_yaml_block(lines, index, lines[index][0])
+            else:
+                item = None
+            out.append(item)
+            continue
+
+        if ":" in item_text:
+            key, raw_value = item_text.split(":", 1)
+            item: dict[str, Any] = {key.strip(): parse_yaml_value(raw_value.strip()) if raw_value.strip() else None}
+            if index < len(lines) and lines[index][0] > line_indent:
+                nested, index = parse_yaml_block(lines, index, lines[index][0])
+                if isinstance(nested, dict):
+                    item.update(nested)
+                else:
+                    item["_items"] = nested
+            out.append(item)
+        else:
+            out.append(parse_yaml_value(item_text))
+    return out, index
+
+
+def read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise GenerationError(f"{path}: could not read: {exc}") from exc
+
+
+def read_json(path: Path) -> dict[str, Any]:
+    try:
+        with path.open("r", encoding="utf-8") as fh:
+            value = json.load(fh)
+    except OSError as exc:
+        raise GenerationError(f"{path}: could not read: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise GenerationError(f"{path}: invalid JSON: {exc}") from exc
+    if not isinstance(value, dict):
+        raise GenerationError(f"{path}: expected JSON object")
+    return value
+
+
+def read_optional_json(path: Path | None) -> dict[str, Any]:
+    if path is None:
+        return {}
+    if not path.exists():
+        raise GenerationError(f"learner state not found: {path}")
+    return read_json(path)
+
+
+def extract_frontmatter(path: Path) -> dict[str, Any]:
+    text = read_text(path)
+    if not text.startswith("---\n"):
+        return {}
+    end = text.find("\n---", 4)
+    if end < 0:
+        raise GenerationError(f"{path}: unterminated frontmatter")
+    value = parse_yaml_subset(text[4:end])
+    if not isinstance(value, dict):
+        raise GenerationError(f"{path}: frontmatter must be a map")
+    return value
+
+
+def first_heading_or_id(path: Path, source_id: str) -> str:
+    for line in read_text(path).splitlines():
+        if line.startswith("# "):
+            return line[2:].strip()[:80]
+    return source_id
+
+
+def first_paragraph(path: Path, fallback: str) -> str:
+    text = read_text(path)
+    body = text
+    if text.startswith("---\n"):
+        end = text.find("\n---", 4)
+        if end >= 0:
+            body = text[end + 4 :]
+    paragraphs: list[str] = []
+    current: list[str] = []
+    for raw in body.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or line.startswith("```"):
+            if current:
+                paragraphs.append(" ".join(current))
+                current = []
+            continue
+        if line.startswith("- ") or line.startswith(":"):
+            continue
+        current.append(line)
+    if current:
+        paragraphs.append(" ".join(current))
+    return (paragraphs[0] if paragraphs else fallback)[:512]
+
+
+def course_yaml(course_dir: Path) -> dict[str, Any]:
+    path = course_dir / "course.yaml"
+    if not path.exists():
+        raise GenerationError(f"missing course.yaml: {path}")
+    value = parse_yaml_subset(read_text(path))
+    if not isinstance(value, dict):
+        raise GenerationError(f"{path}: expected map")
+    return value
+
+
+def collect_source_concepts(course_dir: Path, course_id: str) -> list[SourceConcept]:
+    concepts: list[SourceConcept] = []
+    source_dirs = {
+        "concepts": "concept",
+        "patterns": "skill",
+        "scenarios": "skill",
+    }
+    for dirname, kind in source_dirs.items():
+        for path in sorted((course_dir / dirname).glob("*.md")):
+            frontmatter = extract_frontmatter(path)
+            source_id = frontmatter.get("id")
+            if not isinstance(source_id, str) or not ID_RE.match(source_id):
+                raise GenerationError(f"{path}: missing stable frontmatter id")
+            tags = ["course", course_id]
+            item_type = frontmatter.get("type")
+            if isinstance(item_type, str):
+                tags.append(item_type[:32])
+            concepts.append(
+                SourceConcept(
+                    id=source_id,
+                    label=first_heading_or_id(path, source_id),
+                    kind=kind,
+                    summary=first_paragraph(path, f"Course source item from {course_id}."),
+                    tags=tags,
+                )
+            )
+
+    if not concepts:
+        fallback = stable_id(f"{course_id}.source", "course.source")
+        concepts.append(
+            SourceConcept(
+                id=fallback,
+                label=course_id,
+                kind="source",
+                summary=f"Generated source concept for {course_id}.",
+                tags=["course", course_id],
+            )
+        )
+    return concepts
+
+
+def extract_study_items(course_dir: Path) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for path in sorted((course_dir / "assessments").glob("*.md")):
+        for block in FENCE_RE.findall(read_text(path)):
+            parsed = parse_yaml_subset(block)
+            if isinstance(parsed, dict) and isinstance(parsed.get("study_item"), dict):
+                item = parsed["study_item"]
+                item["_source_path"] = str(path)
+                items.append(item)
+
+    if not items:
+        raise GenerationError(f"{course_dir}: no study_item blocks found in assessments/*.md")
+    return items
+
+
+def episode_state(learner_state: dict[str, Any], pack_id: str, item_id: str) -> dict[str, Any]:
+    episodes = learner_state.get("episodes")
+    if not isinstance(episodes, dict):
+        return {}
+
+    exact = episodes.get(f"{pack_id}/{item_id}")
+    if isinstance(exact, dict):
+        return exact
+
+    for key, value in episodes.items():
+        if isinstance(key, str) and key.endswith(f"/{item_id}") and isinstance(value, dict):
+            return value
+    return {}
+
+
+def signal_for_item(learner_state: dict[str, Any], pack_id: str, item_id: str) -> str:
+    state = episode_state(learner_state, pack_id, item_id)
+    signal = state.get("boundary_signal")
+    return signal if isinstance(signal, str) else "insufficient_evidence"
+
+
+def learner_signal_for_item(learner_state: dict[str, Any], pack_id: str, item_id: str) -> dict[str, Any] | None:
+    if not learner_state:
+        return None
+    state = episode_state(learner_state, pack_id, item_id)
+    signal = signal_for_item(learner_state, pack_id, item_id)
+    if signal in {"insufficient_evidence", "observe"}:
+        return None
+    return {
+        "signal": signal,
+        "attempts": int(state.get("attempts", 0)),
+        "successes": int(state.get("successes", 0)),
+        "friction": int(state.get("friction", 0)),
+    }
+
+
+def apply_learner_state(items: list[dict[str, Any]], learner_state: dict[str, Any], pack_id: str) -> list[dict[str, Any]]:
+    if not learner_state:
+        return items
+
+    indexed: list[tuple[int, int, dict[str, Any]]] = []
+    for index, item in enumerate(items):
+        item_id = stable_id(str(item.get("id", "")), f"{pack_id}.item-{index + 1}")
+        signal = signal_for_item(learner_state, pack_id, item_id)
+        priority = SIGNAL_PRIORITY.get(signal, SIGNAL_PRIORITY["observe"])
+        item = dict(item)
+        item["_learner_signal"] = signal
+        indexed.append((priority, index, item))
+    indexed.sort(key=lambda entry: (entry[0], entry[1]))
+    return [item for _, _, item in indexed]
+
+
+def learner_state_source(learner_state: dict[str, Any]) -> dict[str, str] | None:
+    if not learner_state:
+        return None
+    source = learner_state.get("source")
+    unique_events = "unknown"
+    duplicate_events = "unknown"
+    seq_min = "?"
+    seq_max = "?"
+    if isinstance(source, dict):
+        unique_events = str(source.get("unique_events", "unknown"))
+        duplicate_events = str(source.get("duplicate_events", "unknown"))
+        seq = source.get("seq")
+        if isinstance(seq, dict):
+            seq_min = str(seq.get("min", "?"))
+            seq_max = str(seq.get("max", "?"))
+
+    hints = learner_state.get("next_generation_hints")
+    hint_count = len(hints) if isinstance(hints, list) else 0
+    citation = (
+        f"learner-state signals: unique_events={unique_events}, duplicate_events={duplicate_events}, "
+        f"seq={seq_min}..{seq_max}, next_generation_hints={hint_count}"
+    )
+    return {
+        "id": "learner-state-import",
+        "type": "note",
+        "title": "Imported learner-state signals",
+        "citation": truncate(citation, 512),
+    }
+
+
+def truncate(value: str, max_len: int) -> str:
+    if len(value) <= max_len:
+        return value
+    return value[: max_len - 3].rstrip() + "..."
+
+
+def reveal_for_item(item: dict[str, Any]) -> str:
+    parts: list[str] = []
+    expected = item.get("expected_patterns")
+    if isinstance(expected, list) and expected:
+        parts.append("Working patterns:")
+        parts.extend(f"- {value}" for value in expected if isinstance(value, str))
+
+    expected_parts = item.get("expected_parts")
+    if isinstance(expected_parts, list) and expected_parts:
+        parts.append("Expected parts:")
+        parts.extend(f"- {value}" for value in expected_parts if isinstance(value, str))
+
+    choices = item.get("choices")
+    if isinstance(choices, list) and choices:
+        parts.append("Options:")
+        for choice in choices:
+            if not isinstance(choice, dict):
+                continue
+            text = choice.get("text")
+            verdict = choice.get("verdict")
+            explanation = choice.get("explanation_ru") or choice.get("explanation")
+            line = f"- {text}"
+            if verdict:
+                line += f" [{verdict}]"
+            if explanation:
+                line += f": {explanation}"
+            parts.append(line)
+
+    diagnoses = item.get("diagnoses")
+    if isinstance(diagnoses, dict) and diagnoses:
+        parts.append("Diagnostic signals:")
+        for verdict, values in diagnoses.items():
+            if isinstance(values, list):
+                joined = "; ".join(str(value) for value in values)
+                parts.append(f"- {verdict}: {joined}")
+
+    if not parts:
+        parts.append("Reveal the answer, then rate whether the response worked in context.")
+    return truncate("\n".join(parts), DEFAULT_LIMITS["max_reveal_chars"])
+
+
+def episode_type(item_type: Any) -> str:
+    if item_type == "choice":
+        return "diagnostic"
+    if item_type in {"retrieve", "apply", "diagnostic", "reflection", "contrast", "brief"}:
+        return str(item_type)
+    return "apply"
+
+
+def response_for_item(item: dict[str, Any]) -> dict[str, Any]:
+    if item.get("type") == "choice" and isinstance(item.get("choices"), list):
+        choices = []
+        for choice in item["choices"]:
+            if not isinstance(choice, dict):
+                continue
+            choice_id = stable_id(str(choice.get("id", "")), "choice")
+            label = truncate(str(choice.get("text", choice_id)), 80)
+            choices.append({"id": choice_id, "label": label})
+        return {"mode": "choice", "actions": ["answered", "confused", "skipped"], "choices": choices}
+    return {"mode": "self_rated", "actions": ["again", "hard", "good", "easy", "confused"]}
+
+
+def rubric_id_for_item(item: dict[str, Any]) -> str:
+    if item.get("type") == "choice":
+        return "rubric.generated.choice"
+    return "rubric.generated.self-rated"
+
+
+def build_pack(course_dir: Path, pack_id: str, title: str | None, learner_state: dict[str, Any] | None = None) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    learner_state = learner_state or {}
+    course = course_yaml(course_dir)
+    course_id = str(course.get("id", course_dir.name))
+    if not ID_RE.match(course_id):
+        raise GenerationError(f"invalid course id: {course_id}")
+    if not ID_RE.match(pack_id):
+        raise GenerationError(f"invalid pack id: {pack_id}")
+
+    source_concepts = collect_source_concepts(course_dir, course_id)
+    concept_records = [
+        {
+            "id": concept.id,
+            "label": truncate(concept.label, 80),
+            "kind": concept.kind,
+            "summary": truncate(concept.summary, 512),
+            "tags": sorted(set(concept.tags)),
+        }
+        for concept in source_concepts
+    ]
+    concept_ids = [concept.id for concept in source_concepts[:4]]
+
+    items = apply_learner_state(extract_study_items(course_dir), learner_state, pack_id)
+    episodes: list[dict[str, Any]] = []
+    for index, item in enumerate(items):
+        item_id = stable_id(str(item.get("id", "")), f"{pack_id}.item-{index + 1}")
+        prompt = str(item.get("prompt_ru") or item.get("prompt") or item.get("objective") or item_id)
+        objective = str(item.get("objective") or "Practice the selected course boundary.")
+        episode = {
+            "id": item_id,
+            "type": episode_type(item.get("type")),
+            "title": truncate(objective, 96),
+            "concept_ids": concept_ids,
+            "objective": truncate(objective, 256),
+            "prompt": truncate(prompt, DEFAULT_LIMITS["max_prompt_chars"]),
+            "reveal": reveal_for_item(item),
+            "rubric_id": rubric_id_for_item(item),
+            "response": response_for_item(item),
+            "estimated_seconds": 90,
+            "m5paper": {"layout": "choice" if item.get("type") == "choice" else "text", "full_refresh": True},
+        }
+        learner_signal = learner_signal_for_item(learner_state, pack_id, item_id)
+        if learner_signal:
+            episode["learner_signal"] = learner_signal
+        if index + 1 < len(items):
+            next_id = stable_id(str(items[index + 1].get("id", "")), f"{pack_id}.item-{index + 2}")
+            episode["next"] = [next_id]
+        episodes.append(episode)
+
+    rubrics = [
+        {
+            "id": "rubric.generated.self-rated",
+            "kind": "self_check",
+            "criteria": [
+                {
+                    "id": "criterion.generated.worked",
+                    "text": "I answered before reveal and judged whether the answer works in context.",
+                }
+            ],
+            "actions": [
+                {"id": "again", "label": "Again", "meaning": "Could not produce a useful answer yet."},
+                {"id": "hard", "label": "Hard", "meaning": "Produced a partial answer with high effort."},
+                {"id": "good", "label": "Good", "meaning": "Answer works in this context."},
+                {"id": "easy", "label": "Easy", "meaning": "Answer was quick and transferable."},
+                {"id": "confused", "label": "Confused", "meaning": "Prompt or pattern needs repair."},
+            ],
+        },
+        {
+            "id": "rubric.generated.choice",
+            "kind": "choice_key",
+            "criteria": [
+                {
+                    "id": "criterion.generated.choice",
+                    "text": "I selected an option and read why each option works, fails, or depends.",
+                }
+            ],
+            "actions": [
+                {"id": "confused", "label": "Confused", "meaning": "Choices did not clarify the distinction."},
+                {"id": "skipped", "label": "Skipped", "meaning": "No answer selected."},
+            ],
+        },
+    ]
+    used_rubrics = {episode["rubric_id"] for episode in episodes}
+    rubrics = [rubric for rubric in rubrics if rubric["id"] in used_rubrics]
+
+    sources = [
+        {
+            "id": f"course-{course_id}",
+            "type": "manual",
+            "title": f"Course source: {course_id}",
+            "citation": str(course_dir),
+        }
+    ]
+    learner_source = learner_state_source(learner_state)
+    if learner_source:
+        sources.append(learner_source)
+
+    manifest = {
+        "schema": "biscuit.study-pack.v0",
+        "pack_id": pack_id,
+        "title": truncate(title or f"Generated: {course.get('title', course_id)}", 96),
+        "description": truncate(f"Generated from course source {course_id} assessment seeds.", 512),
+        "revision": f"{date.today().isoformat()}.generated",
+        "language": str(course.get("language", "ru")),
+        "entry_episode_id": episodes[0]["id"],
+        "generator": {
+            "id": "study-twin-course-compiler",
+            "version": "0.1.0",
+            "policy": "assessment-seed-v0",
+        },
+        "files": {
+            "concepts": "concepts.jsonl",
+            "episodes": "episodes.jsonl",
+            "rubrics": "rubrics.jsonl",
+            "assets_dir": "assets",
+        },
+        "counts": {
+            "concepts": len(concept_records),
+            "episodes": len(episodes),
+            "rubrics": len(rubrics),
+        },
+        "constraints": DEFAULT_LIMITS,
+        "runtime_targets": ["m5paper", "mac"],
+        "sources": sources,
+    }
+    return manifest, concept_records, episodes, rubrics
+
+
+def write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
+    with path.open("w", encoding="utf-8") as fh:
+        for record in records:
+            fh.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n")
+
+
+def write_pack(out_dir: Path, manifest: dict[str, Any], concepts: list[dict[str, Any]], episodes: list[dict[str, Any]], rubrics: list[dict[str, Any]], force: bool) -> None:
+    if out_dir.exists():
+        if not force:
+            raise GenerationError(f"output already exists, pass --force to overwrite: {out_dir}")
+        shutil.rmtree(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=False)
+    (out_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    write_jsonl(out_dir / "concepts.jsonl", concepts)
+    write_jsonl(out_dir / "episodes.jsonl", episodes)
+    write_jsonl(out_dir / "rubrics.jsonl", rubrics)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Compile a course source tree into a StudyPack v0.")
+    parser.add_argument("course_dir", type=Path)
+    parser.add_argument("--pack-id", help="Generated StudyPack id. Defaults to generated-<course-id>.")
+    parser.add_argument("--title", help="Override generated pack title.")
+    parser.add_argument("--out-dir", type=Path, help="Output directory. Defaults to examples/packs/<pack-id>.")
+    parser.add_argument("--learner-state", type=Path, help="Optional learner-state JSON from import-logs --state-out.")
+    parser.add_argument("--force", action="store_true", help="Overwrite an existing output directory.")
+    parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[3])
+    args = parser.parse_args()
+
+    try:
+        course_dir = args.course_dir.resolve()
+        course = course_yaml(course_dir)
+        course_id = str(course.get("id", course_dir.name))
+        pack_id = args.pack_id or f"generated-{course_id}"
+        out_dir = args.out_dir or args.repo_root / "agents" / "study-twin" / "examples" / "packs" / pack_id
+        learner_state = read_optional_json(args.learner_state)
+        manifest, concepts, episodes, rubrics = build_pack(course_dir, pack_id, args.title, learner_state)
+        write_pack(out_dir, manifest, concepts, episodes, rubrics, args.force)
+    except GenerationError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"Generated StudyPack: {out_dir}")
+    print(f"  concepts: {len(concepts)}")
+    print(f"  episodes: {len(episodes)}")
+    print(f"  rubrics: {len(rubrics)}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

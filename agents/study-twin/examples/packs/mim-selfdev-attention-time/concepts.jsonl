@@ -1,0 +1,4 @@
+{"id":"mim-selfdev-attention-time.c.attention","label":"Внимание","kind":"concept","summary":"Внимание — ограниченный ресурс управления действием и обучением.","tags":["mim","mac-first"]}
+{"id":"mim-selfdev-attention-time.c.composure","label":"Собранность","kind":"concept","summary":"Собранность удерживает текущий объект работы без лишнего переключения.","tags":["mim","mac-first"]}
+{"id":"mim-selfdev-attention-time.c.important","label":"Важное и срочное","kind":"concept","summary":"Срочность требует реакции, важность требует стратегического удержания.","tags":["mim","mac-first"]}
+{"id":"mim-selfdev-attention-time.c.exocortex","label":"Экзокортекс","kind":"concept","summary":"Экзокортекс разгружает память и помогает удерживать контуры работы.","tags":["mim","mac-first"]}

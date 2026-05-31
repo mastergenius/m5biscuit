@@ -1,0 +1,7 @@
+{"id":"fr.builder.slot-sentence","label":"Предложение из слотов","kind":"concept","summary":"Простая фраза собирается из субъекта, оператора, действия/предмета и обстоятельства.","tags":["fr","a1","grammar"]}
+{"id":"fr.builder.operators","label":"Операторы хочу/могу/надо","kind":"skill","summary":"Je veux, je voudrais, je peux, je dois дают быстрый каркас для бытовых предложений.","tags":["fr","a1","pattern"]}
+{"id":"fr.builder.question","label":"Вопрос из утверждения","kind":"skill","summary":"Est-ce que превращает утверждение в вопрос без перестановки слов.","tags":["fr","a1","question"]}
+{"id":"fr.builder.negation","label":"Отрицание и ограничения","kind":"concept","summary":"Ne ... pas и короткие ограничения вроде pas trop court помогают говорить границы.","tags":["fr","a1","grammar"]}
+{"id":"fr.builder.prep","label":"Малые связки","kind":"concept","summary":"Pour, avec, sans, a, de связывают цель, наличие, отсутствие, время и происхождение.","tags":["fr","a1","preposition"]}
+{"id":"fr.builder.time-place","label":"Время и место","kind":"skill","summary":"Aujourd'hui, demain, ici, la-bas, a 15h добавляются как отдельные обстоятельства.","tags":["fr","a1","context"]}
+{"id":"fr.builder.repair","label":"Проверка понимания","kind":"phrase","summary":"Je ne comprends pas, vous pouvez repeter ? позволяет продолжать разговор без притворства.","tags":["fr","a1","repair"]}

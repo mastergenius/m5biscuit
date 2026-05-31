@@ -1,0 +1,55 @@
+{
+  "schema": "biscuit.study-pack.v0",
+  "pack_id": "mim-first-method-move",
+  "title": "МИМ: первый методический ход",
+  "description": "Case-first pilot: учит выбирать первый методический ход до выбора технического решения.",
+  "revision": "2026-05-25.mim.2",
+  "language": "ru",
+  "entry_episode_id": "mim-first-method-move.e01",
+  "generator": {
+    "id": "manual-case-first-pilot",
+    "version": "0.1.0",
+    "policy": "learning-system-v2-probe"
+  },
+  "files": {
+    "concepts": "concepts.jsonl",
+    "episodes": "episodes.jsonl",
+    "rubrics": "rubrics.jsonl"
+  },
+  "counts": {
+    "concepts": 6,
+    "episodes": 7,
+    "rubrics": 3
+  },
+  "constraints": {
+    "max_pack_bytes": 524288,
+    "max_prompt_chars": 1200,
+    "max_reveal_chars": 1600,
+    "max_rubric_chars": 1600,
+    "max_jsonl_line_bytes": 2200
+  },
+  "runtime_targets": [
+    "mac",
+    "m5paper"
+  ],
+  "sources": [
+    {
+      "id": "src.learning-system-v2.problem-framing",
+      "type": "manual",
+      "title": "Learning System v2 problem framing",
+      "citation": "agents/study-twin/methodology/problem-framing.md"
+    },
+    {
+      "id": "src.learning-system-v2.capability-evidence",
+      "type": "manual",
+      "title": "Learning System v2 capability and evidence model",
+      "citation": "agents/study-twin/methodology/capability-evidence-model.md"
+    },
+    {
+      "id": "src.learning-system-v2.baseline-probes",
+      "type": "manual",
+      "title": "Learning System v2 baseline probes",
+      "citation": "agents/study-twin/methodology/baseline-probes.md"
+    }
+  ]
+}

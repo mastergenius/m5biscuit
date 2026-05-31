@@ -1,0 +1,20 @@
+{
+  "name": "Biscuit Learning",
+  "short_name": "Biscuit",
+  "description": "Offline-first StudyPack runtime for Biscuit learning sessions.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f6f4",
+  "theme_color": "#f5f6f4",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

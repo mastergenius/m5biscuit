@@ -1,0 +1,3 @@
+{"id":"fr.concept.service-scenario","label":"Service Scenario","kind":"concept","summary":"Сервисный разговор не надо учить как длинную пьесу. Его полезнее видеть как несколько рабочих слотов:","tags":["concept","course","fr-practical-service"]}
+{"id":"fr.pattern.slot-sentence-builder","label":"Slot Sentence Builder","kind":"skill","summary":"Бытовая французская фраза собирается как конструктор:","tags":["course","fr-practical-service","pattern"]}
+{"id":"fr.scenario.haircut-appointment","label":"Haircut Appointment","kind":"skill","summary":"You need to book a haircut, describe a simple preference, and stay in control if the hairdresser asks something quickly.","tags":["course","fr-practical-service","scenario"]}

@@ -1,0 +1,37 @@
+{
+  "schema": "biscuit.study-pack.v0",
+  "pack_id": "fr-a1-pronunciation-grounding",
+  "title": "Французский A1: база произношения",
+  "description": "Pack про ключевые французские звуки и различия без аудио: артикуляция, минимальные пары, немые буквы и liaison.",
+  "revision": "2026-05-27.fr.1",
+  "language": "ru",
+  "entry_episode_id": "fr-a1-pronunciation-grounding.e01",
+  "generator": {
+    "id": "manual-rich-case-pack",
+    "version": "2026-05-27",
+    "policy": "pronunciation grounding without audio"
+  },
+  "files": {
+    "concepts": "concepts.jsonl",
+    "episodes": "episodes.jsonl",
+    "rubrics": "rubrics.jsonl"
+  },
+  "counts": {
+    "concepts": 8,
+    "episodes": 10,
+    "rubrics": 2
+  },
+  "constraints": {
+    "max_prompt_chars": 900,
+    "max_reveal_chars": 1200,
+    "max_jsonl_line_bytes": 2200
+  },
+  "runtime_targets": ["m5paper", "mac"],
+  "sources": [
+    {
+      "id": "src.fr.a1.pronunciation-grounding",
+      "type": "manual",
+      "title": "French A1 pronunciation grounding notes"
+    }
+  ]
+}

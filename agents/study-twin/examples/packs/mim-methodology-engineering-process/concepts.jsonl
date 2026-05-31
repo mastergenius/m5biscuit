@@ -1,0 +1,4 @@
+{"id":"mim-methodology-engineering-process.c.process","label":"Инженерный процесс","kind":"concept","summary":"Процесс разработки — метод преобразования неопределенности в работающую систему.","tags":["mim","mac-first"]}
+{"id":"mim-methodology-engineering-process.c.work","label":"Управление работами","kind":"concept","summary":"Управление задачами не равно управлению методом разработки.","tags":["mim","mac-first"]}
+{"id":"mim-methodology-engineering-process.c.customer","label":"Ориентация на клиента","kind":"concept","summary":"Ценность проверяется в опыте использования, а не только в полноте реализации.","tags":["mim","mac-first"]}
+{"id":"mim-methodology-engineering-process.c.lean","label":"Элегантность и lean","kind":"concept","summary":"Сокращение лишней работы достигается точностью моделей и проверок.","tags":["mim","mac-first"]}

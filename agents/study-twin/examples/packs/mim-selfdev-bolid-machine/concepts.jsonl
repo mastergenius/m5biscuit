@@ -1,0 +1,8 @@
+{"id":"mim-selfdev-bolid-machine.c.bolid","label":"Болид","kind":"concept","summary":"Система Пилот плюс Машина, где результат зависит от связки человека, среды, инструментов и методов.","tags":["mim","selfdev","guide1"]}
+{"id":"mim-selfdev-bolid-machine.c.pilot","label":"Пилот","kind":"concept","summary":"Управляющий центр: намерения, роли, ценности, мировоззрение, выбор направления.","tags":["mim","selfdev","guide1"]}
+{"id":"mim-selfdev-bolid-machine.c.machine","label":"Машина","kind":"concept","summary":"Инструменты, среды, привычки, протоколы и расширения, которые усиливают или тормозят Пилота.","tags":["mim","selfdev","guide1"]}
+{"id":"mim-selfdev-bolid-machine.c.exobody","label":"Экзотело","kind":"concept","summary":"Физические расширения человека: вещи, среда, транспорт, капитал и носимые инструменты.","tags":["mim","selfdev","guide1"]}
+{"id":"mim-selfdev-bolid-machine.c.exocortex","label":"Экзокортекс","kind":"concept","summary":"Внешняя когнитивная система: память, процессинг и интерфейс, а не просто набор приложений.","tags":["mim","selfdev","guide1"]}
+{"id":"mim-selfdev-bolid-machine.c.method-runtime","label":"Метод как runtime","kind":"concept","summary":"Воспроизводимый алгоритм действий, который может исполняться в разных средах.","tags":["mim","selfdev","guide1"]}
+{"id":"mim-selfdev-bolid-machine.c.feedback-loop","label":"Обратная связь Болида","kind":"concept","summary":"Данные Машины, по которым Пилот корректирует курс до серьезного расхождения.","tags":["mim","selfdev","guide1"]}
+{"id":"mim-selfdev-bolid-machine.c.broken-link","label":"Разорванная связка","kind":"concept","summary":"Место, где намерение, инструмент или метод существуют, но не поддерживают реальную работу.","tags":["mim","selfdev","guide1"]}

@@ -1,0 +1,205 @@
+#!/usr/bin/env python3
+"""Validate a Study Twin course source tree.
+
+This intentionally uses only the Python standard library. Course sources are
+Markdown/YAML authored material, so this validator checks practical conventions
+rather than trying to be a complete YAML parser.
+"""
+
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+from pathlib import Path
+
+
+ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{1,95}$")
+CORE_DIRS = ("tracks", "concepts", "scenarios", "assessments")
+
+
+class Validator:
+    def __init__(self) -> None:
+        self.errors: list[str] = []
+        self.warnings: list[str] = []
+
+    def error(self, message: str) -> None:
+        self.errors.append(message)
+
+    def warn(self, message: str) -> None:
+        self.warnings.append(message)
+
+    def require(self, condition: bool, message: str) -> None:
+        if not condition:
+            self.error(message)
+
+    def validate_id(self, value: str | None, label: str) -> None:
+        self.require(isinstance(value, str) and bool(ID_RE.match(value)), f"{label} must be a stable id")
+
+
+def strip_scalar(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1]
+    return value
+
+
+def parse_simple_yaml(text: str) -> dict[str, str | list[str]]:
+    """Parse the small top-level YAML subset used by course frontmatter.
+
+    Supported:
+    - `key: value`
+    - `key:` followed by indented `- value` lines
+
+    Nested maps are intentionally ignored. This is enough for ids, course links,
+    source_packs, and runtime_packs.
+    """
+
+    values: dict[str, str | list[str]] = {}
+    current_list: str | None = None
+
+    for raw_line in text.splitlines():
+        line = raw_line.rstrip()
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        if not raw_line.startswith((" ", "\t")) and ":" in line:
+            key, raw_value = line.split(":", 1)
+            key = key.strip()
+            raw_value = raw_value.strip()
+            current_list = None
+            if raw_value:
+                values[key] = strip_scalar(raw_value)
+            else:
+                values[key] = []
+                current_list = key
+            continue
+
+        if current_list and stripped.startswith("- "):
+            item = strip_scalar(stripped[2:])
+            existing = values.get(current_list)
+            if isinstance(existing, list):
+                existing.append(item)
+
+    return values
+
+
+def read_text(path: Path, validator: Validator) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError as exc:
+        validator.error(f"{path}: could not read: {exc}")
+        return ""
+
+
+def read_course_yaml(course_dir: Path, validator: Validator) -> dict[str, str | list[str]]:
+    path = course_dir / "course.yaml"
+    if not path.exists():
+        validator.error(f"missing file: {path}")
+        return {}
+    return parse_simple_yaml(read_text(path, validator))
+
+
+def extract_frontmatter(path: Path, validator: Validator) -> dict[str, str | list[str]]:
+    text = read_text(path, validator)
+    if not text.startswith("---\n"):
+        return {}
+
+    end = text.find("\n---", 4)
+    if end < 0:
+        validator.error(f"{path}: unterminated frontmatter")
+        return {}
+    return parse_simple_yaml(text[4:end])
+
+
+def list_values(values: dict[str, str | list[str]], key: str) -> list[str]:
+    value = values.get(key)
+    return value if isinstance(value, list) else []
+
+
+def validate_pack_refs(pack_ids: list[str], repo_root: Path, label: str, validator: Validator) -> None:
+    for pack_id in pack_ids:
+        validator.validate_id(pack_id, f"{label} pack id")
+        manifest = repo_root / "agents" / "study-twin" / "examples" / "packs" / pack_id / "manifest.json"
+        if not manifest.exists():
+            validator.error(f"{label}: referenced pack does not exist: {pack_id}")
+
+
+def validate_markdown_files(course_dir: Path, course_id: str, repo_root: Path, validator: Validator) -> int:
+    seen_ids: dict[str, Path] = {}
+    frontmatter_count = 0
+
+    for path in sorted(course_dir.rglob("*.md")):
+        if path.name == "README.md":
+            continue
+
+        frontmatter = extract_frontmatter(path, validator)
+        if not frontmatter:
+            validator.error(f"{path}: missing frontmatter")
+            continue
+
+        frontmatter_count += 1
+        item_id = frontmatter.get("id")
+        validator.validate_id(item_id if isinstance(item_id, str) else None, f"{path}: id")
+        if isinstance(item_id, str):
+            if item_id in seen_ids:
+                validator.error(f"duplicate frontmatter id {item_id}: {seen_ids[item_id]} and {path}")
+            seen_ids[item_id] = path
+
+        item_course = frontmatter.get("course")
+        if isinstance(item_course, str) and item_course != course_id:
+            validator.error(f"{path}: course mismatch: expected {course_id}, got {item_course}")
+
+        validate_pack_refs(list_values(frontmatter, "runtime_packs"), repo_root, str(path), validator)
+
+    return frontmatter_count
+
+
+def validate_course(course_dir: Path, repo_root: Path, validator: Validator) -> None:
+    course_dir = course_dir.resolve()
+    repo_root = repo_root.resolve()
+    validator.require(course_dir.exists() and course_dir.is_dir(), f"course directory does not exist: {course_dir}")
+    validator.require((course_dir / "README.md").exists(), f"missing file: {course_dir / 'README.md'}")
+
+    course_yaml = read_course_yaml(course_dir, validator)
+    course_id = course_yaml.get("id")
+    validator.validate_id(course_id if isinstance(course_id, str) else None, "course.yaml id")
+    if isinstance(course_id, str) and course_dir.name != course_id:
+        validator.warn(f"course directory name differs from course id: {course_dir.name} != {course_id}")
+
+    for dirname in CORE_DIRS:
+        path = course_dir / dirname
+        validator.require(path.exists() and path.is_dir(), f"missing core directory: {path}")
+
+    validate_pack_refs(list_values(course_yaml, "source_packs"), repo_root, "course.yaml source_packs", validator)
+
+    if isinstance(course_id, str):
+        count = validate_markdown_files(course_dir, course_id, repo_root, validator)
+        if count == 0:
+            validator.warn(f"{course_dir}: no Markdown source files with frontmatter")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Validate a Study Twin course source tree.")
+    parser.add_argument("course_dir", type=Path)
+    parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[3])
+    args = parser.parse_args()
+
+    validator = Validator()
+    validate_course(args.course_dir, args.repo_root, validator)
+
+    for warning in validator.warnings:
+        print(f"WARNING: {warning}", file=sys.stderr)
+
+    if validator.errors:
+        for error in validator.errors:
+            print(f"ERROR: {error}", file=sys.stderr)
+        return 1
+
+    print(f"Course source valid: {args.course_dir}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

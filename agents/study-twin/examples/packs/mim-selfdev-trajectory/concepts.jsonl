@@ -1,0 +1,4 @@
+{"id":"mim-selfdev-trajectory.c.trajectory","label":"Траектория","kind":"concept","summary":"Траектория связывает текущие практики с долгосрочным развитием агента.","tags":["mim","mac-first"]}
+{"id":"mim-selfdev-trajectory.c.open-ended","label":"Бесконечное развитие","kind":"concept","summary":"Развитие не заканчивается сертификатом; оно поддерживает способность менять методы.","tags":["mim","mac-first"]}
+{"id":"mim-selfdev-trajectory.c.culture","label":"Культура МИМ","kind":"concept","summary":"Культура задает нормы рационального развития и работы с методами.","tags":["mim","mac-first"]}
+{"id":"mim-selfdev-trajectory.c.project","label":"Проект саморазвития","kind":"concept","summary":"Саморазвитие можно вести как систему работ с состояниями и проверками.","tags":["mim","mac-first"]}

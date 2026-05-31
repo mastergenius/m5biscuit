@@ -63,6 +63,10 @@
         "easy",
         "confused",
         "skipped",
+        "known",
+        "relevant",
+        "deeper",
+        "unclear",
         "undo"
       ]
     },

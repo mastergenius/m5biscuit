@@ -1,0 +1,4 @@
+{"id":"mim-methodology-method-stack.c.method","label":"Метод","kind":"concept","summary":"Метод рассматривается как воспроизводимый способ работы агента, а не как лозунг или список этапов.","tags":["mim","mac-first"]}
+{"id":"mim-methodology-method-stack.c.stack","label":"Стек методов","kind":"concept","summary":"Методы раскладываются по уровням: от фундаментальных мыслительных дисциплин до прикладных рабочих техник.","tags":["mim","mac-first"]}
+{"id":"mim-methodology-method-stack.c.choose","label":"Выбор метода","kind":"concept","summary":"Выбор метода делается под ситуацию, роль и систему интереса, а не по моде или привычке.","tags":["mim","mac-first"]}
+{"id":"mim-methodology-method-stack.c.representation","label":"Представление метода","kind":"concept","summary":"Метод можно представить алгоритмом, схемой, деревом или чеклистом, если это помогает действовать.","tags":["mim","mac-first"]}

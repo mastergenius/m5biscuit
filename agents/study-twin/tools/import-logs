@@ -1,0 +1,307 @@
+#!/usr/bin/env python3
+"""Summarize Biscuit ReviewEvent JSONL logs and build learner-state signals."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from collections import Counter, defaultdict
+from pathlib import Path
+from typing import Any
+
+DEFAULT_STATE_OUT = Path(__file__).resolve().parents[1] / "state" / "learner-state.json"
+SUCCESS_ACTIONS = {"good", "easy", "known", "relevant"}
+FRICTION_ACTIONS = {"again", "hard", "confused", "skipped", "unclear"}
+INTEREST_ACTIONS = {"deeper", "relevant"}
+ATTEMPT_ACTIONS = SUCCESS_ACTIONS | FRICTION_ACTIONS | INTEREST_ACTIONS | {"answered"}
+
+
+def iter_log_files(paths: list[Path]) -> list[Path]:
+    files: list[Path] = []
+    for path in paths:
+        if path.is_dir():
+            files.extend(sorted(path.rglob("*.jsonl")))
+        elif path.is_file():
+            files.append(path)
+    return files
+
+
+def read_events(path: Path) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as fh:
+        for line_no, line in enumerate(fh, start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                value = json.loads(stripped)
+            except json.JSONDecodeError as exc:
+                print(f"warning: {path}:{line_no}: invalid JSON: {exc}", file=sys.stderr)
+                continue
+            if isinstance(value, dict) and value.get("schema") == "biscuit.review-event.v0":
+                events.append(value)
+            else:
+                print(f"warning: {path}:{line_no}: skipped non ReviewEvent record", file=sys.stderr)
+    return events
+
+
+def dedupe_events(events: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
+    seen: set[str] = set()
+    unique: list[dict[str, Any]] = []
+    duplicates = 0
+    for event in events:
+        device_id = str(event.get("device_id", "unknown"))
+        seq = event.get("seq")
+        key = f"{device_id}:{seq}" if isinstance(seq, int) else json.dumps(event, sort_keys=True)
+        if key in seen:
+            duplicates += 1
+            continue
+        seen.add(key)
+        unique.append(event)
+    return unique, duplicates
+
+
+def response_choice_id(event: dict[str, Any]) -> str | None:
+    response = event.get("response")
+    if not isinstance(response, dict):
+        return None
+    choice_id = response.get("choice_id")
+    return choice_id if isinstance(choice_id, str) and choice_id else None
+
+
+def avg(values: list[int]) -> float | None:
+    if not values:
+        return None
+    return round(sum(values) / len(values), 2)
+
+
+def boundary_signal(actions: Counter[str]) -> str:
+    attempts = sum(actions[action] for action in ATTEMPT_ACTIONS)
+    successes = sum(actions[action] for action in SUCCESS_ACTIONS)
+    friction = sum(actions[action] for action in FRICTION_ACTIONS)
+    confused_or_again = actions["confused"] + actions["again"]
+
+    if attempts == 0:
+        return "insufficient_evidence"
+    if confused_or_again >= 2 or confused_or_again > successes:
+        return "repair"
+    if actions["skipped"] > 0 and successes == 0:
+        return "reduce_load"
+    if sum(actions[action] for action in INTEREST_ACTIONS) > 0:
+        return "increase_transfer"
+    if actions["easy"] >= 2 and friction == 0:
+        return "increase_transfer"
+    if successes >= 1 and friction == 0:
+        return "stabilize_then_stretch"
+    if actions["hard"] > 0 or friction > 0:
+        return "near_transfer"
+    return "observe"
+
+
+def new_stats() -> dict[str, Any]:
+    return {
+        "events": 0,
+        "actions": Counter(),
+        "choices": Counter(),
+        "confidence": [],
+        "effort": [],
+        "first_seq": None,
+        "last_seq": None,
+    }
+
+
+def update_stats(stats: dict[str, Any], event: dict[str, Any]) -> None:
+    action = str(event.get("action", "unknown"))
+    stats["events"] += 1
+    stats["actions"][action] += 1
+
+    choice_id = response_choice_id(event)
+    if choice_id:
+        stats["choices"][choice_id] += 1
+
+    confidence = event.get("confidence")
+    if isinstance(confidence, int):
+        stats["confidence"].append(confidence)
+    effort = event.get("effort")
+    if isinstance(effort, int):
+        stats["effort"].append(effort)
+
+    seq = event.get("seq")
+    if isinstance(seq, int):
+        first_seq = stats["first_seq"]
+        last_seq = stats["last_seq"]
+        stats["first_seq"] = seq if first_seq is None else min(first_seq, seq)
+        stats["last_seq"] = seq if last_seq is None else max(last_seq, seq)
+
+
+def freeze_stats(stats: dict[str, Any]) -> dict[str, Any]:
+    actions = stats["actions"]
+    attempts = sum(actions[action] for action in ATTEMPT_ACTIONS)
+    successes = sum(actions[action] for action in SUCCESS_ACTIONS)
+    friction = sum(actions[action] for action in FRICTION_ACTIONS)
+    return {
+        "events": stats["events"],
+        "attempts": attempts,
+        "successes": successes,
+        "friction": friction,
+        "actions": dict(sorted(actions.items())),
+        "choices": dict(sorted(stats["choices"].items())),
+        "avg_confidence": avg(stats["confidence"]),
+        "avg_effort": avg(stats["effort"]),
+        "first_seq": stats["first_seq"],
+        "last_seq": stats["last_seq"],
+        "boundary_signal": boundary_signal(actions),
+    }
+
+
+def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
+    by_pack: dict[str, Counter[str]] = defaultdict(Counter)
+    by_episode: dict[str, Counter[str]] = defaultdict(Counter)
+    choices: dict[str, Counter[str]] = defaultdict(Counter)
+    devices: Counter[str] = Counter()
+    sessions: Counter[str] = Counter()
+    min_seq: int | None = None
+    max_seq: int | None = None
+
+    for event in events:
+        pack_id = str(event.get("pack_id", "unknown"))
+        episode_id = str(event.get("episode_id", "unknown"))
+        action = str(event.get("action", "unknown"))
+        device_id = str(event.get("device_id", "unknown"))
+        by_pack[pack_id][action] += 1
+        by_episode[f"{pack_id}/{episode_id}"][action] += 1
+        choice_id = response_choice_id(event)
+        if choice_id:
+            choices[f"{pack_id}/{episode_id}"][choice_id] += 1
+        devices[device_id] += 1
+        sessions[f"{device_id}:{pack_id}"] += 1
+        seq = event.get("seq")
+        if isinstance(seq, int):
+            min_seq = seq if min_seq is None else min(min_seq, seq)
+            max_seq = seq if max_seq is None else max(max_seq, seq)
+
+    return {
+        "events": len(events),
+        "seq": {"min": min_seq, "max": max_seq},
+        "devices": dict(sorted(devices.items())),
+        "packs": {pack: dict(counter) for pack, counter in sorted(by_pack.items())},
+        "episodes": {episode: dict(counter) for episode, counter in sorted(by_episode.items())},
+        "choices": {episode: dict(counter) for episode, counter in sorted(choices.items())},
+        "device_pack_sessions": dict(sorted(sessions.items())),
+    }
+
+
+def build_learner_state(events: list[dict[str, Any]], duplicate_count: int) -> dict[str, Any]:
+    devices: Counter[str] = Counter()
+    pack_stats: dict[str, dict[str, Any]] = defaultdict(new_stats)
+    episode_stats: dict[str, dict[str, Any]] = defaultdict(new_stats)
+    concept_stats: dict[str, dict[str, Any]] = defaultdict(new_stats)
+    episode_concepts: dict[str, set[str]] = defaultdict(set)
+    pack_revisions: dict[str, set[str]] = defaultdict(set)
+    min_seq: int | None = None
+    max_seq: int | None = None
+
+    for event in events:
+        pack_id = str(event.get("pack_id", "unknown"))
+        episode_id = str(event.get("episode_id", "unknown"))
+        episode_key = f"{pack_id}/{episode_id}"
+        devices[str(event.get("device_id", "unknown"))] += 1
+
+        revision = event.get("pack_revision")
+        if isinstance(revision, str) and revision:
+            pack_revisions[pack_id].add(revision)
+
+        update_stats(pack_stats[pack_id], event)
+        update_stats(episode_stats[episode_key], event)
+
+        concept_ids = event.get("concept_ids")
+        if isinstance(concept_ids, list):
+            for concept_id in concept_ids:
+                if not isinstance(concept_id, str) or not concept_id:
+                    continue
+                episode_concepts[episode_key].add(concept_id)
+                update_stats(concept_stats[concept_id], event)
+
+        seq = event.get("seq")
+        if isinstance(seq, int):
+            min_seq = seq if min_seq is None else min(min_seq, seq)
+            max_seq = seq if max_seq is None else max(max_seq, seq)
+
+    packs = {
+        pack_id: {
+            **freeze_stats(stats),
+            "revisions": sorted(pack_revisions.get(pack_id, set())),
+        }
+        for pack_id, stats in sorted(pack_stats.items())
+    }
+    episodes = {
+        episode_key: {
+            **freeze_stats(stats),
+            "pack_id": episode_key.split("/", 1)[0],
+            "episode_id": episode_key.split("/", 1)[1],
+            "concept_ids": sorted(episode_concepts.get(episode_key, set())),
+        }
+        for episode_key, stats in sorted(episode_stats.items())
+    }
+    concepts = {concept_id: freeze_stats(stats) for concept_id, stats in sorted(concept_stats.items())}
+
+    return {
+        "schema": "biscuit.learner-state.v0",
+        "generated_by": "agents/study-twin/tools/import-logs",
+        "source": {
+            "unique_events": len(events),
+            "duplicate_events": duplicate_count,
+            "seq": {"min": min_seq, "max": max_seq},
+            "devices": dict(sorted(devices.items())),
+        },
+        "packs": packs,
+        "episodes": episodes,
+        "concepts": concepts,
+        "next_generation_hints": next_generation_hints(packs, episodes, concepts),
+    }
+
+
+def next_generation_hints(packs: dict[str, Any], episodes: dict[str, Any], concepts: dict[str, Any]) -> list[dict[str, str]]:
+    hints: list[dict[str, str]] = []
+    for scope, records in (("concept", concepts), ("episode", episodes), ("pack", packs)):
+        for record_id, record in records.items():
+            signal = str(record.get("boundary_signal", "observe"))
+            if signal in {"insufficient_evidence", "observe"}:
+                continue
+            reason = (
+                f"attempts={record.get('attempts', 0)}, successes={record.get('successes', 0)}, "
+                f"friction={record.get('friction', 0)}"
+            )
+            hints.append({"scope": scope, "id": record_id, "signal": signal, "reason": reason})
+    return hints
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Summarize Biscuit ReviewEvent JSONL logs.")
+    parser.add_argument("paths", nargs="+", type=Path)
+    parser.add_argument("--out", type=Path, help="Optional JSON summary output path.")
+    parser.add_argument("--state-out", type=Path, help=f"Optional learner-state output path. Suggested: {DEFAULT_STATE_OUT}")
+    args = parser.parse_args()
+
+    events: list[dict[str, Any]] = []
+    for path in iter_log_files(args.paths):
+        events.extend(read_events(path))
+    events, duplicates = dedupe_events(events)
+
+    summary = summarize(events)
+    text = json.dumps(summary, ensure_ascii=False, indent=2) + "\n"
+    if args.out:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(text, encoding="utf-8")
+    print(text, end="")
+
+    if args.state_out:
+        state = build_learner_state(events, duplicates)
+        args.state_out.parent.mkdir(parents=True, exist_ok=True)
+        args.state_out.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

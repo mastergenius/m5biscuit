@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f5f6f4" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Biscuit Learning" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <title>Biscuit Learning Viewer</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <aside class="sidebar" aria-label="StudyPack list">
+        <div class="brand">
+          <div>
+            <h1>Biscuit Learning</h1>
+            <p id="pack-count">Loading packs</p>
+          </div>
+          <button class="icon-button" id="refresh-packs" type="button" title="Refresh pack list" aria-label="Refresh pack list">
+            <span aria-hidden="true">↻</span>
+          </button>
+        </div>
+        <label class="filter-label" for="pack-filter">Filter packs</label>
+        <input id="pack-filter" class="pack-filter" type="search" placeholder="mim, modeling, attention..." autocomplete="off" />
+        <div class="pack-list" id="pack-list" role="list"></div>
+      </aside>
+
+      <section class="workspace" aria-label="Study session">
+        <header class="session-header">
+          <div>
+            <p class="eyebrow" id="pack-meta">No pack selected</p>
+            <h2 id="episode-title">Select a StudyPack</h2>
+            <p class="pack-description" id="pack-description"></p>
+          </div>
+          <div class="session-actions">
+            <button class="ghost-button" id="prev-episode" type="button">Previous</button>
+            <button class="ghost-button" id="next-episode" type="button">Next</button>
+          </div>
+        </header>
+
+        <section class="runtime-status" aria-label="Runtime status">
+          <div class="runtime-status-metrics">
+            <span id="runtime-status-text">Starting runtime</span>
+            <span id="session-summary">0 events this session</span>
+          </div>
+          <div class="runtime-buttons">
+            <button class="ghost-button compact" id="sync-events" type="button">Sync</button>
+            <button class="ghost-button compact" id="export-events" type="button">Export</button>
+          </div>
+        </section>
+
+        <div class="episode-grid">
+          <article class="episode-pane prompt-pane">
+            <div class="pane-heading">
+              <span id="episode-type">Runtime</span>
+              <span id="episode-progress">0 / 0</span>
+            </div>
+            <div class="prompt-text" id="prompt-text">
+              The viewer uses the same StudyPack files as M5Paper.
+            </div>
+            <div class="choice-list" id="choice-list" hidden></div>
+            <textarea id="open-response" class="open-response" rows="6" hidden placeholder="Короткий ответ или заметка"></textarea>
+          </article>
+
+          <article class="episode-pane reveal-pane" id="reveal-pane">
+            <div class="pane-heading">
+              <span>Reveal</span>
+              <span id="rubric-label"></span>
+            </div>
+            <div class="reveal-text" id="reveal-text">Reveal appears here after the first attempt.</div>
+            <div class="rubric" id="rubric"></div>
+          </article>
+        </div>
+
+        <footer class="review-bar">
+          <button class="primary-button" id="reveal-button" type="button">Reveal</button>
+          <div class="rating-actions" id="rating-actions"></div>
+        </footer>
+      </section>
+    </main>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

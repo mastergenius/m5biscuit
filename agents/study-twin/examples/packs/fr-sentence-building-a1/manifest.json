@@ -1,0 +1,37 @@
+{
+  "schema": "biscuit.study-pack.v0",
+  "pack_id": "fr-sentence-building-a1",
+  "title": "Французский A1: сборка предложений",
+  "description": "Короткий трек про то, как строить бытовые французские фразы из каркаса, оператора, предмета, вопроса, границы и ремонта разговора.",
+  "revision": "2026-05-27.fr.2",
+  "language": "ru",
+  "entry_episode_id": "fr-sentence-building-a1.e01",
+  "generator": {
+    "id": "manual-rich-case-pack",
+    "version": "2026-05-27",
+    "policy": "sentence-builder nuanced choices"
+  },
+  "files": {
+    "concepts": "concepts.jsonl",
+    "episodes": "episodes.jsonl",
+    "rubrics": "rubrics.jsonl"
+  },
+  "counts": {
+    "concepts": 9,
+    "episodes": 10,
+    "rubrics": 2
+  },
+  "constraints": {
+    "max_prompt_chars": 900,
+    "max_reveal_chars": 1200,
+    "max_jsonl_line_bytes": 2200
+  },
+  "runtime_targets": ["m5paper", "mac"],
+  "sources": [
+    {
+      "id": "src.fr.sentence-building-a1",
+      "type": "manual",
+      "title": "French A1 sentence-building notes for practical service situations"
+    }
+  ]
+}

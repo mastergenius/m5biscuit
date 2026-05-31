@@ -142,6 +142,10 @@
             "max_rubric_chars": {
               "type": "integer",
               "minimum": 1
+            },
+            "max_jsonl_line_bytes": {
+              "type": "integer",
+              "minimum": 1
             }
           }
         },
@@ -280,6 +284,9 @@
         "response": {
           "$ref": "#/$defs/response"
         },
+        "learner_signal": {
+          "$ref": "#/$defs/learner_signal"
+        },
         "estimated_seconds": {
           "type": "integer",
           "minimum": 1,
@@ -306,6 +313,36 @@
         }
       }
     },
+    "learner_signal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["signal"],
+      "properties": {
+        "signal": {
+          "enum": [
+            "repair",
+            "reduce_load",
+            "near_transfer",
+            "stabilize_then_stretch",
+            "increase_transfer",
+            "observe",
+            "insufficient_evidence"
+          ]
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "successes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "friction": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
     "response": {
       "type": "object",
       "additionalProperties": false,
@@ -318,7 +355,21 @@
           "type": "array",
           "minItems": 1,
           "items": {
-            "enum": ["shown", "revealed", "answered", "again", "hard", "good", "easy", "confused", "skipped"]
+            "enum": [
+              "shown",
+              "revealed",
+              "answered",
+              "again",
+              "hard",
+              "good",
+              "easy",
+              "confused",
+              "skipped",
+              "known",
+              "relevant",
+              "deeper",
+              "unclear"
+            ]
           },
           "uniqueItems": true
         },
@@ -381,7 +432,7 @@
             "required": ["id", "label", "meaning"],
             "properties": {
               "id": {
-                "enum": ["again", "hard", "good", "easy", "confused", "skipped"]
+                "enum": ["again", "hard", "good", "easy", "confused", "skipped", "known", "relevant", "deeper", "unclear"]
               },
               "label": {
                 "type": "string",

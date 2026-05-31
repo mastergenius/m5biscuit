@@ -1,0 +1,506 @@
+#!/usr/bin/env python3
+"""Push StudyPacks to Biscuit and pull ReviewEvent logs.
+
+This helper talks to the existing token-protected HTTP file API exposed by the
+device transfer session. It intentionally uses only the Python standard library.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import mimetypes
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+from typing import Any
+
+
+DEFAULT_CONFIG = Path(__file__).resolve().parents[1] / "device.local.json"
+DEFAULT_IMPORT_DIR = Path(__file__).resolve().parents[1] / "imports"
+DEFAULT_PACKS_DIR = Path(__file__).resolve().parents[1] / "examples" / "packs"
+STUDY_PACK_ROOT = "/biscuit/study/packs"
+REVIEW_LOG_ROOT = "/biscuit/study/logs/reviews"
+CURRENT_PACK_IDS = (
+    "mim-systems-method-deep",
+    "mim-selfdev-learner-culture",
+    "mim-selfdev-bolid-machine",
+    "mim-selfdev-worldview-grounding",
+    "mim-selfdev-roles-gates",
+    "mim-selfdev-values-trajectory",
+    "mim-workdev-modeling-objects",
+    "mim-workdev-models-communication",
+    "mim-workdev-explanations",
+    "mim-workdev-object-dynamics",
+    "mim-workdev-systems-thinking",
+    "fr-sentence-building-a1",
+    "fr-a1-vocab-grounding-probe",
+    "fr-a1-pronunciation-grounding",
+)
+
+
+class SyncError(Exception):
+    pass
+
+
+def read_json(path: Path) -> dict[str, Any]:
+    try:
+        with path.open("r", encoding="utf-8") as fh:
+            value = json.load(fh)
+    except OSError as exc:
+        raise SyncError(f"{path}: could not read: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise SyncError(f"{path}: invalid JSON: {exc}") from exc
+    if not isinstance(value, dict):
+        raise SyncError(f"{path}: expected JSON object")
+    return value
+
+
+def parse_device_url(url: str) -> tuple[str, str | None]:
+    parsed = urllib.parse.urlparse(url)
+    if not parsed.scheme or not parsed.netloc:
+        raise SyncError(f"invalid URL: {url}")
+    query = urllib.parse.parse_qs(parsed.query)
+    token = query.get("token", [None])[0]
+    base = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, "", "", "", ""))
+    return base.rstrip("/"), token
+
+
+def save_config(path: Path, base_url: str, token: str) -> None:
+    path.write_text(json.dumps({"base_url": base_url, "token": token}, indent=2) + "\n", encoding="utf-8")
+
+
+def load_connection(args: argparse.Namespace) -> tuple[str, str]:
+    base_url = None
+    token = args.token
+
+    if args.url:
+        base_url, parsed_token = parse_device_url(args.url)
+        token = token or parsed_token
+    elif args.config.exists():
+        config = read_json(args.config)
+        base_url = str(config.get("base_url", "")).rstrip("/")
+        token = token or str(config.get("token", ""))
+
+    if not base_url:
+        raise SyncError("missing --url and no remembered device.local.json")
+    if not token:
+        raise SyncError("missing session token")
+
+    if args.remember:
+        save_config(args.config, base_url, token)
+    return base_url, token
+
+
+def request(base_url: str, token: str, method: str, path: str, data: bytes | None = None,
+            content_type: str | None = None) -> bytes:
+    url = base_url + path
+    headers = {"Authorization": f"Bearer {token}"}
+    if content_type:
+        headers["Content-Type"] = content_type
+    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return resp.read()
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        raise SyncError(f"{method} {url} failed: HTTP {exc.code}: {body}") from exc
+    except urllib.error.URLError as exc:
+        raise SyncError(f"{method} {url} failed: {exc}") from exc
+
+
+def request_form(base_url: str, token: str, path: str, fields: dict[str, str]) -> bytes:
+    data = urllib.parse.urlencode(fields).encode("utf-8")
+    return request(base_url, token, "POST", path, data, "application/x-www-form-urlencoded")
+
+
+def request_json(base_url: str, token: str, method: str, path: str,
+                 payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    data = None
+    content_type = None
+    if payload is not None:
+        data = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        content_type = "application/json"
+    body = request(base_url, token, method, path, data, content_type)
+    try:
+        value = json.loads(body.decode("utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SyncError(f"{method} {path}: invalid JSON response: {exc}") from exc
+    if not isinstance(value, dict):
+        raise SyncError(f"{method} {path}: expected JSON object response")
+    return value
+
+
+def is_missing_endpoint(exc: SyncError) -> bool:
+    return "HTTP 404" in str(exc)
+
+
+def local_pack_id(pack_dir: Path) -> str:
+    manifest_path = pack_dir / "manifest.json"
+    if not manifest_path.exists():
+        raise SyncError(f"not a StudyPack directory: {pack_dir}")
+    manifest = read_json(manifest_path)
+    return str(manifest.get("pack_id") or pack_dir.name)
+
+
+def current_pack_dirs(packs_dir: Path) -> list[Path]:
+    out: list[Path] = []
+    missing: list[str] = []
+    for pack_id in CURRENT_PACK_IDS:
+        pack_dir = packs_dir / pack_id
+        if (pack_dir / "manifest.json").exists():
+            out.append(pack_dir)
+        else:
+            missing.append(pack_id)
+    if missing:
+        raise SyncError(f"missing current pack directories under {packs_dir}: {', '.join(missing)}")
+    return out
+
+
+def all_pack_dirs(packs_dir: Path) -> list[Path]:
+    if not packs_dir.exists():
+        raise SyncError(f"packs directory does not exist: {packs_dir}")
+    out = [path for path in sorted(packs_dir.iterdir()) if (path / "manifest.json").exists()]
+    if not out:
+        raise SyncError(f"no StudyPacks found under {packs_dir}")
+    return out
+
+
+def mkdir(base_url: str, token: str, remote_dir: str) -> None:
+    remote_dir = remote_dir.strip("/")
+    if not remote_dir:
+        return
+    parts = remote_dir.split("/")
+    parent = "/"
+    for part in parts:
+        try:
+            request_form(base_url, token, "/mkdir", {"path": parent, "name": part})
+        except SyncError as exc:
+            text = str(exc)
+            if "Folder already exists" not in text:
+                raise
+        parent = parent.rstrip("/") + "/" + part
+
+
+def multipart_body(field_name: str, file_path: Path) -> tuple[bytes, str]:
+    boundary = "----biscuit-study-sync-boundary"
+    content_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+    data = file_path.read_bytes()
+    head = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="{field_name}"; filename="{file_path.name}"\r\n'
+        f"Content-Type: {content_type}\r\n\r\n"
+    ).encode("utf-8")
+    tail = f"\r\n--{boundary}--\r\n".encode("utf-8")
+    return head + data + tail, f"multipart/form-data; boundary={boundary}"
+
+
+def upload_file(base_url: str, token: str, local_path: Path, remote_dir: str) -> None:
+    body, content_type = multipart_body("file", local_path)
+    encoded_path = urllib.parse.quote(remote_dir, safe="")
+    request(base_url, token, "POST", f"/upload?path={encoded_path}", body, content_type)
+
+
+def push_pack(base_url: str, token: str, pack_dir: Path) -> None:
+    pack_id = local_pack_id(pack_dir)
+    remote_dir = f"{STUDY_PACK_ROOT}/{pack_id}"
+    mkdir(base_url, token, remote_dir)
+    for name in ("manifest.json", "concepts.jsonl", "episodes.jsonl", "rubrics.jsonl"):
+        local_path = pack_dir / name
+        if not local_path.exists():
+            raise SyncError(f"missing pack file: {local_path}")
+        upload_file(base_url, token, local_path, remote_dir)
+        print(f"uploaded {pack_id}/{name}")
+
+
+def list_files(base_url: str, token: str, remote_dir: str) -> list[dict[str, Any]]:
+    encoded_path = urllib.parse.quote(remote_dir, safe="")
+    body = request(base_url, token, "GET", f"/api/files?path={encoded_path}")
+    value = json.loads(body.decode("utf-8"))
+    if not isinstance(value, list):
+        raise SyncError(f"unexpected file list response for {remote_dir}")
+    return [item for item in value if isinstance(item, dict)]
+
+
+def remote_entry_path(parent: str, name: str) -> str:
+    return parent.rstrip("/") + "/" + name
+
+
+def delete_paths(base_url: str, token: str, paths: list[str], dry_run: bool = False) -> None:
+    if not paths:
+        return
+    if dry_run:
+        for path in paths:
+            print(f"would delete {path}")
+        return
+    request_form(base_url, token, "/delete", {"paths": json.dumps(paths)})
+    for path in paths:
+        print(f"deleted {path}")
+
+
+def delete_tree(base_url: str, token: str, remote_path: str, dry_run: bool = False) -> None:
+    try:
+        entries = list_files(base_url, token, remote_path)
+    except SyncError as exc:
+        if "HTTP 404" in str(exc):
+            return
+        raise
+
+    for entry in entries:
+        name = str(entry.get("name", ""))
+        if not name:
+            continue
+        child_path = remote_entry_path(remote_path, name)
+        if entry.get("isDirectory"):
+            delete_tree(base_url, token, child_path, dry_run)
+        else:
+            delete_paths(base_url, token, [child_path], dry_run)
+    delete_paths(base_url, token, [remote_path], dry_run)
+
+
+def list_remote_packs(base_url: str, token: str) -> list[str]:
+    try:
+        value = request_json(base_url, token, "GET", "/api/study/packs")
+        packs = value.get("packs")
+        if not isinstance(packs, list):
+            raise SyncError("unexpected /api/study/packs response")
+        out: list[str] = []
+        for pack in packs:
+            if isinstance(pack, dict):
+                pack_id = pack.get("id")
+                if isinstance(pack_id, str) and pack_id:
+                    out.append(pack_id)
+        return sorted(out)
+    except SyncError as exc:
+        if not is_missing_endpoint(exc):
+            raise
+
+    try:
+        entries = list_files(base_url, token, STUDY_PACK_ROOT)
+    except SyncError as exc:
+        if is_missing_endpoint(exc):
+            return []
+        raise
+    return sorted(str(entry.get("name", "")) for entry in entries if entry.get("isDirectory") and entry.get("name"))
+
+
+def download_file(base_url: str, token: str, remote_path: str, out_path: Path) -> None:
+    encoded_path = urllib.parse.quote(remote_path, safe="")
+    body = request(base_url, token, "GET", f"/download?path={encoded_path}")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_bytes(body)
+
+
+def download_study_log_segment(base_url: str, token: str, segment_name: str, out_path: Path) -> None:
+    # Query form hits the exact registered route. Path form may be intercepted by WebDAV on
+    # firmware builds where WebDAV owns unmatched GET requests.
+    safe_name = urllib.parse.urlencode({"segment": segment_name})
+    body = request(base_url, token, "GET", f"/api/study/logs?{safe_name}")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_bytes(body)
+
+
+def sync_device_time(base_url: str, token: str) -> bool:
+    epoch_ms = int(time.time() * 1000)
+    try:
+        request_form(base_url, token, "/api/study/time", {"epoch_ms": str(epoch_ms)})
+    except SyncError as exc:
+        if is_missing_endpoint(exc):
+            return False
+        raise
+    print("synced device clock from Mac")
+    return True
+
+
+def pull_logs_via_study_api(base_url: str, token: str, out_dir: Path, ack: bool) -> bool:
+    try:
+        value = request_json(base_url, token, "GET", "/api/study/logs")
+    except SyncError as exc:
+        if is_missing_endpoint(exc):
+            return False
+        raise
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    segments = value.get("segments")
+    if not isinstance(segments, list):
+        raise SyncError("unexpected /api/study/logs response")
+
+    count = 0
+    for segment in segments:
+        if not isinstance(segment, dict):
+            continue
+        name = segment.get("name")
+        if not isinstance(name, str) or not name:
+            continue
+        out_path = out_dir / name
+        download_study_log_segment(base_url, token, name, out_path)
+        count += 1
+        print(f"downloaded study log {name} -> {out_path}")
+
+    if count == 0:
+        print("no review log files found")
+
+    if ack:
+        state = value.get("state")
+        if not isinstance(state, dict):
+            raise SyncError("cannot ack logs: /api/study/logs response has no state object")
+        last_seq = int(state.get("last_seq") or 0)
+        request_form(base_url, token, "/api/study/logs/ack", {"acked_seq": str(last_seq)})
+        print(f"acked review events through seq {last_seq}")
+
+    return True
+
+
+def pull_logs(base_url: str, token: str, out_dir: Path, ack: bool = False) -> None:
+    sync_device_time(base_url, token)
+    if pull_logs_via_study_api(base_url, token, out_dir, ack):
+        return
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        entries = list_files(base_url, token, REVIEW_LOG_ROOT)
+    except SyncError as exc:
+        if is_missing_endpoint(exc):
+            print("no review logs found on device")
+            return
+        raise
+
+    count = 0
+    for entry in entries:
+        if entry.get("isDirectory"):
+            continue
+        name = str(entry.get("name", ""))
+        if not name:
+            continue
+        remote_path = f"{REVIEW_LOG_ROOT}/{name}"
+        out_path = out_dir / name
+        download_file(base_url, token, remote_path, out_path)
+        count += 1
+        print(f"downloaded {remote_path} -> {out_path}")
+    if count == 0:
+        print("no review log files found")
+
+
+def cmd_push(args: argparse.Namespace, base_url: str, token: str) -> None:
+    for pack in args.pack_dirs:
+        push_pack(base_url, token, pack)
+
+
+def cmd_push_current(args: argparse.Namespace, base_url: str, token: str) -> None:
+    for pack in current_pack_dirs(args.packs_dir):
+        push_pack(base_url, token, pack)
+
+
+def cmd_push_all(args: argparse.Namespace, base_url: str, token: str) -> None:
+    for pack in all_pack_dirs(args.packs_dir):
+        push_pack(base_url, token, pack)
+
+
+def cmd_list_packs(args: argparse.Namespace, base_url: str, token: str) -> None:
+    packs = list_remote_packs(base_url, token)
+    if not packs:
+        print("no StudyPacks installed on device")
+        return
+    for pack_id in packs:
+        print(pack_id)
+
+
+def cmd_clean_packs(args: argparse.Namespace, base_url: str, token: str) -> None:
+    remote_packs = list_remote_packs(base_url, token)
+    keep = set(args.keep or CURRENT_PACK_IDS)
+    remove = [pack_id for pack_id in remote_packs if pack_id not in keep]
+    if not remove:
+        print("no stale StudyPacks to remove")
+        return
+    for pack_id in remove:
+        delete_tree(base_url, token, f"{STUDY_PACK_ROOT}/{pack_id}", args.dry_run)
+
+
+def cmd_pull_logs(args: argparse.Namespace, base_url: str, token: str) -> None:
+    pull_logs(base_url, token, args.out, args.ack)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Push StudyPacks and pull ReviewEvent logs from Biscuit.")
+    parser.add_argument("--url", help="Pairing URL, e.g. http://host/?token=...")
+    parser.add_argument("--token", help="Session token if --url does not include it.")
+    parser.add_argument("--remember", action="store_true", help="Store base URL and token in device.local.json.")
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    push = sub.add_parser("push-pack", help="Upload one or more StudyPack directories.")
+    push.add_argument("pack_dirs", type=Path, nargs="+")
+
+    push_current = sub.add_parser("push-current", help="Upload the current curated StudyPack set.")
+    push_current.add_argument("--packs-dir", type=Path, default=DEFAULT_PACKS_DIR)
+
+    push_all = sub.add_parser("push-all", help="Upload every StudyPack under --packs-dir.")
+    push_all.add_argument("--packs-dir", type=Path, default=DEFAULT_PACKS_DIR)
+
+    pull = sub.add_parser("pull-logs", help="Download review log JSONL files.")
+    pull.add_argument("--out", type=Path, default=DEFAULT_IMPORT_DIR)
+    pull.add_argument("--ack", action="store_true", help="Acknowledge downloaded events on the device.")
+
+    sync = sub.add_parser("sync", help="Upload packs, then download logs.")
+    sync.add_argument("pack_dirs", type=Path, nargs="+")
+    sync.add_argument("--out", type=Path, default=DEFAULT_IMPORT_DIR)
+    sync.add_argument("--ack-logs", action="store_true", help="Acknowledge downloaded events on the device.")
+
+    sync_current = sub.add_parser("sync-current", help="Upload current packs, then download logs.")
+    sync_current.add_argument("--packs-dir", type=Path, default=DEFAULT_PACKS_DIR)
+    sync_current.add_argument("--out", type=Path, default=DEFAULT_IMPORT_DIR)
+    sync_current.add_argument("--ack-logs", action="store_true", help="Acknowledge downloaded events on the device.")
+
+    sync_all = sub.add_parser("sync-all", help="Upload all local packs, then download logs.")
+    sync_all.add_argument("--packs-dir", type=Path, default=DEFAULT_PACKS_DIR)
+    sync_all.add_argument("--out", type=Path, default=DEFAULT_IMPORT_DIR)
+    sync_all.add_argument("--ack-logs", action="store_true", help="Acknowledge downloaded events on the device.")
+
+    sub.add_parser("list-packs", help="List StudyPacks installed on the device.")
+
+    clean = sub.add_parser("clean-packs", help="Remove remote StudyPacks not in the keep list.")
+    clean.add_argument("--keep", action="append", help="Pack id to keep. Defaults to the current curated set.")
+    clean.add_argument("--dry-run", action="store_true", help="Print removals without deleting anything.")
+
+    args = parser.parse_args()
+    try:
+        base_url, token = load_connection(args)
+    except SyncError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    try:
+        if args.command == "push-pack":
+            cmd_push(args, base_url, token)
+        elif args.command == "push-current":
+            cmd_push_current(args, base_url, token)
+        elif args.command == "push-all":
+            cmd_push_all(args, base_url, token)
+        elif args.command == "pull-logs":
+            cmd_pull_logs(args, base_url, token)
+        elif args.command == "sync":
+            cmd_push(args, base_url, token)
+            pull_logs(base_url, token, args.out, args.ack_logs)
+        elif args.command == "sync-current":
+            cmd_push_current(args, base_url, token)
+            pull_logs(base_url, token, args.out, args.ack_logs)
+        elif args.command == "sync-all":
+            cmd_push_all(args, base_url, token)
+            pull_logs(base_url, token, args.out, args.ack_logs)
+        elif args.command == "list-packs":
+            cmd_list_packs(args, base_url, token)
+        elif args.command == "clean-packs":
+            cmd_clean_packs(args, base_url, token)
+        else:
+            raise SyncError(f"unknown command: {args.command}")
+    except SyncError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

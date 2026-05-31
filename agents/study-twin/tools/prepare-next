@@ -1,0 +1,163 @@
+#!/usr/bin/env python3
+"""Prepare the next generated StudyPacks from imported review evidence.
+
+This is a local orchestration helper over the smaller tools:
+
+1. import ReviewEvent logs into learner-state;
+2. validate course source trees;
+3. regenerate disposable generated-* packs with learner-state;
+4. validate the generated packs.
+
+It intentionally does not talk to the device. Run device-sync before/after this
+tool when a transfer session is active.
+"""
+
+from __future__ import annotations
+
+import argparse
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+
+STUDY_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = STUDY_ROOT.parents[1]
+TOOLS_DIR = STUDY_ROOT / "tools"
+DEFAULT_IMPORT_DIR = STUDY_ROOT / "imports"
+DEFAULT_STATE_OUT = STUDY_ROOT / "state" / "learner-state.json"
+DEFAULT_SUMMARY_OUT = STUDY_ROOT / "state" / "review-summary.json"
+DEFAULT_PACKS_DIR = STUDY_ROOT / "examples" / "packs"
+DEFAULT_PACKS = (
+    ("fr-practical-service", "generated-fr-practical-service"),
+    ("fpf-practical-thinking", "generated-fpf-practical-thinking"),
+)
+
+
+@dataclass(frozen=True)
+class PackTarget:
+    course_id: str
+    pack_id: str
+
+    @property
+    def course_dir(self) -> Path:
+        return STUDY_ROOT / "courses" / self.course_id
+
+
+class PrepareError(Exception):
+    pass
+
+
+def run_cmd(args: list[str], dry_run: bool = False) -> None:
+    printable = " ".join(args)
+    if dry_run:
+        print(f"would run: {printable}")
+        return
+    print(f"running: {printable}", flush=True)
+    try:
+        subprocess.run(args, cwd=REPO_ROOT, check=True)
+    except subprocess.CalledProcessError as exc:
+        raise PrepareError(f"command failed with exit code {exc.returncode}: {printable}") from exc
+
+
+def parse_pack_target(value: str) -> PackTarget:
+    if "=" not in value:
+        raise argparse.ArgumentTypeError("target must be COURSE_ID=PACK_ID")
+    course_id, pack_id = value.split("=", 1)
+    course_id = course_id.strip()
+    pack_id = pack_id.strip()
+    if not course_id or not pack_id:
+        raise argparse.ArgumentTypeError("target must be COURSE_ID=PACK_ID")
+    return PackTarget(course_id, pack_id)
+
+
+def find_review_logs(log_paths: list[Path]) -> list[Path]:
+    files: list[Path] = []
+    for path in log_paths:
+        if path.is_dir():
+            files.extend(sorted(path.rglob("*.jsonl")))
+        elif path.is_file() and path.suffix == ".jsonl":
+            files.append(path)
+    return files
+
+
+def import_logs(log_paths: list[Path], state_out: Path, summary_out: Path, dry_run: bool, allow_empty: bool) -> None:
+    if not dry_run and not find_review_logs(log_paths) and not allow_empty:
+        joined = ", ".join(str(path) for path in log_paths)
+        raise PrepareError(
+            f"no ReviewEvent JSONL logs found under {joined}; run device-sync pull-logs first or pass --allow-empty"
+        )
+    args = [
+        sys.executable,
+        str(TOOLS_DIR / "import-logs"),
+        *(str(path) for path in log_paths),
+        "--out",
+        str(summary_out),
+        "--state-out",
+        str(state_out),
+    ]
+    run_cmd(args, dry_run)
+
+
+def regenerate_pack(target: PackTarget, packs_dir: Path, state_out: Path, dry_run: bool) -> None:
+    pack_dir = packs_dir / target.pack_id
+    run_cmd([sys.executable, str(TOOLS_DIR / "validate-course"), str(target.course_dir)], dry_run)
+    run_cmd(
+        [
+            sys.executable,
+            str(TOOLS_DIR / "generate-pack"),
+            str(target.course_dir),
+            "--pack-id",
+            target.pack_id,
+            "--out-dir",
+            str(pack_dir),
+            "--learner-state",
+            str(state_out),
+            "--force",
+        ],
+        dry_run,
+    )
+    run_cmd([sys.executable, str(TOOLS_DIR / "validate-pack"), str(pack_dir)], dry_run)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Prepare next generated StudyPacks from review logs.")
+    parser.add_argument("logs", nargs="*", type=Path, default=[DEFAULT_IMPORT_DIR],
+                        help="Review log file or directory. Defaults to agents/study-twin/imports.")
+    parser.add_argument("--state-out", type=Path, default=DEFAULT_STATE_OUT)
+    parser.add_argument("--summary-out", type=Path, default=DEFAULT_SUMMARY_OUT)
+    parser.add_argument("--packs-dir", type=Path, default=DEFAULT_PACKS_DIR,
+                        help="Output directory containing generated StudyPack folders.")
+    parser.add_argument("--target", action="append", type=parse_pack_target,
+                        help="Course/pack pair as COURSE_ID=PACK_ID. May be repeated.")
+    parser.add_argument("--skip-import", action="store_true",
+                        help="Use an existing learner-state file instead of importing logs first.")
+    parser.add_argument("--allow-empty", action="store_true",
+                        help="Allow generation from an empty evidence set when no review logs are present.")
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+
+    targets = args.target if args.target else [PackTarget(course_id, pack_id) for course_id, pack_id in DEFAULT_PACKS]
+    try:
+        if not args.skip_import:
+            import_logs(args.logs, args.state_out, args.summary_out, args.dry_run, args.allow_empty)
+        elif not args.dry_run and not args.state_out.exists():
+            raise PrepareError(f"missing learner-state file for --skip-import: {args.state_out}")
+
+        for target in targets:
+            regenerate_pack(target, args.packs_dir, args.state_out, args.dry_run)
+    except PrepareError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    if args.dry_run:
+        print("Dry run complete.")
+    else:
+        print(f"Prepared {len(targets)} generated StudyPack(s).")
+        print(f"  learner state: {args.state_out}")
+        print(f"  review summary: {args.summary_out}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

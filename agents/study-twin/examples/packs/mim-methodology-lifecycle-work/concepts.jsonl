@@ -1,0 +1,4 @@
+{"id":"mim-methodology-lifecycle-work.c.system","label":"Система интереса","kind":"concept","summary":"Развитие обсуждается относительно системы интереса и ее состояний, а не абстрактного проекта.","tags":["mim","mac-first"]}
+{"id":"mim-methodology-lifecycle-work.c.state","label":"Состояние системы","kind":"concept","summary":"Работа создателей меняет состояния системы; это наблюдаемая единица прогресса.","tags":["mim","mac-first"]}
+{"id":"mim-methodology-lifecycle-work.c.creator","label":"Создатели","kind":"concept","summary":"Создатели имеют роли, методы и координацию; система не развивается сама.","tags":["mim","mac-first"]}
+{"id":"mim-methodology-lifecycle-work.c.time","label":"Методологическое время","kind":"concept","summary":"Время работы лучше видеть как последовательность переходов состояний, а не как красивые фазы.","tags":["mim","mac-first"]}

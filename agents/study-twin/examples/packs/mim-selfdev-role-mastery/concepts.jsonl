@@ -1,0 +1,4 @@
+{"id":"mim-selfdev-role-mastery.c.role","label":"Роль","kind":"concept","summary":"Роль задает интересы, ответственность и язык оценки действия.","tags":["mim","mac-first"]}
+{"id":"mim-selfdev-role-mastery.c.interest","label":"Ролевой интерес","kind":"concept","summary":"Ролевой интерес показывает, что считается успехом для этой роли.","tags":["mim","mac-first"]}
+{"id":"mim-selfdev-role-mastery.c.practice","label":"Практика","kind":"concept","summary":"Практика повторяет метод до устойчивого мастерства в ситуациях.","tags":["mim","mac-first"]}
+{"id":"mim-selfdev-role-mastery.c.mastery","label":"Мастерство","kind":"concept","summary":"Мастерство видно по качеству действия в роли, а не по знакомству с терминами.","tags":["mim","mac-first"]}

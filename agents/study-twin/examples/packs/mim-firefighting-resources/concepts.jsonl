@@ -1,0 +1,4 @@
+{"id":"mim-firefighting-resources.c.resource","label":"Ресурс","kind":"concept","summary":"Ресурс расходуется или резервируется при выполнении работы: время, внимание, энергия, память, деньги.","tags":["mim","mac-first"]}
+{"id":"mim-firefighting-resources.c.operation","label":"Операционная работа","kind":"concept","summary":"Операционка удерживает поток выполнения и ограничения ресурсов.","tags":["mim","mac-first"]}
+{"id":"mim-firefighting-resources.c.role-view","label":"Ролевой view","kind":"concept","summary":"Разные роли видят разные объекты и оптимизируют разные параметры.","tags":["mim","mac-first"]}
+{"id":"mim-firefighting-resources.c.jitter","label":"Онтологический дребезг","kind":"concept","summary":"Дребезг возникает, когда объекты учета меняются прямо во время управления.","tags":["mim","mac-first"]}

@@ -1,0 +1,53 @@
+{
+  "schema": "biscuit.study-pack.v0",
+  "pack_id": "mim-workdev-object-dynamics",
+  "title": "МИМ РР: динамика объектов",
+  "description": "Ветка про изменения состояний, временные части, версии, checklist, удержание внимания и делегирование как устойчивое состояние.",
+  "revision": "2026-05-28.mim.1",
+  "language": "ru",
+  "entry_episode_id": "mim-workdev-object-dynamics.e01",
+  "generator": {
+    "id": "mim-workdev-modeling-generator",
+    "version": "2026-05-28",
+    "policy": "dense modeling propagation calibration routing"
+  },
+  "files": {
+    "concepts": "concepts.jsonl",
+    "episodes": "episodes.jsonl",
+    "rubrics": "rubrics.jsonl"
+  },
+  "counts": {
+    "concepts": 9,
+    "episodes": 12,
+    "rubrics": 2
+  },
+  "constraints": {
+    "max_prompt_chars": 900,
+    "max_reveal_chars": 1200,
+    "max_jsonl_line_bytes": 2200
+  },
+  "runtime_targets": [
+    "m5paper",
+    "mac"
+  ],
+  "sources": [
+    {
+      "id": "src.mim.modeling.dynamic-objects",
+      "type": "note",
+      "title": "Моделирование: динамический анализ объектов",
+      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/modeling-1/attention-retention/dynamic-analysis-of-objects.md"
+    },
+    {
+      "id": "src.mim.modeling.state-changes",
+      "type": "note",
+      "title": "Моделирование: изменения состояний объектов",
+      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/modeling-1/attention-retention/state-changes-of-objects.md"
+    },
+    {
+      "id": "src.mim.modeling.thinking",
+      "type": "note",
+      "title": "Моделирование: мышление и модели",
+      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/modeling-1/basics-of-modeling/thinking-and-modeling.md"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "schema": "biscuit.study-pack.v0",
+  "pack_id": "fpf-practical-thinking-articles",
+  "title": "FPF: практическое мышление без зубрежки",
+  "description": "Мини-статьи о сути FPF как инженерно-управленческой гигиены: сигнал, граница, готовность, доказательства, метрики и решения.",
+  "revision": "2026-05-18.1",
+  "language": "ru",
+  "entry_episode_id": "fpf-practical-art-001",
+  "generator": {
+    "id": "study-twin-seed",
+    "version": "0.1.0",
+    "policy": "manual-useful-prototype"
+  },
+  "files": {
+    "concepts": "concepts.jsonl",
+    "episodes": "episodes.jsonl",
+    "rubrics": "rubrics.jsonl",
+    "assets_dir": "assets"
+  },
+  "counts": {
+    "concepts": 7,
+    "episodes": 8,
+    "rubrics": 4
+  },
+  "constraints": {
+    "max_pack_bytes": 524288,
+    "max_prompt_chars": 900,
+    "max_reveal_chars": 1200,
+    "max_rubric_chars": 1200
+  },
+  "runtime_targets": ["m5paper", "mac"],
+  "sources": [
+    {
+      "id": "course-fpf-practical-thinking",
+      "type": "manual",
+      "title": "Course source: fpf-practical-thinking",
+      "citation": "agents/study-twin/courses/fpf-practical-thinking/"
+    },
+    {
+      "id": "haft-fpf-search-2026-05-18",
+      "type": "note",
+      "title": "Локальная выборка haft fpf по FRAME, CHR, EXP и DEC",
+      "citation": "haft fpf search: signal explicitness, scope/boundary, acceptance criteria, indicator roles, weakest link, decision predictions."
+    }
+  ]
+}

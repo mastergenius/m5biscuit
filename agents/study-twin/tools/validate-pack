@@ -38,12 +38,28 @@ KNOWN_ACTIONS = {
     "easy",
     "confused",
     "skipped",
+    "known",
+    "relevant",
+    "deeper",
+    "unclear",
+}
+KNOWN_LEARNER_SIGNALS = {
+    "repair",
+    "reduce_load",
+    "near_transfer",
+    "stabilize_then_stretch",
+    "increase_transfer",
+    "observe",
+    "insufficient_evidence",
 }
 DEFAULT_LIMITS = {
     "max_pack_bytes": 512 * 1024,
     "max_prompt_chars": 900,
     "max_reveal_chars": 1200,
     "max_rubric_chars": 1200,
+    # Firmware currently reads each JSONL record into a fixed 2300-byte buffer.
+    # Keep a little headroom for future fields and UTF-8-heavy content.
+    "max_jsonl_line_bytes": 2200,
 }
 
 
@@ -107,6 +123,26 @@ def read_jsonl(path: Path, validator: Validator) -> list[dict[str, Any]]:
     except FileNotFoundError:
         validator.error(f"missing file: {path}")
     return records
+
+
+def validate_jsonl_line_sizes(pack_dir: Path, limits: dict[str, int], validator: Validator) -> None:
+    max_bytes = limits["max_jsonl_line_bytes"]
+    for name in ("concepts.jsonl", "episodes.jsonl", "rubrics.jsonl"):
+        path = pack_dir / name
+        try:
+            with path.open("r", encoding="utf-8") as fh:
+                for line_no, line in enumerate(fh, start=1):
+                    stripped = line.rstrip("\r\n")
+                    if not stripped:
+                        continue
+                    byte_len = len(stripped.encode("utf-8"))
+                    if byte_len > max_bytes:
+                        validator.error(
+                            f"{path}:{line_no}: JSONL line is {byte_len} bytes, exceeds {max_bytes} byte firmware budget"
+                        )
+        except FileNotFoundError:
+            # read_jsonl already reports missing files.
+            continue
 
 
 def text_len(value: Any) -> int:
@@ -294,6 +330,19 @@ def validate_episodes(
                         if action not in {"shown", "revealed", "answered"} and action not in rubric_actions:
                             validator.warn(f"episode {episode_id}: action {action} is not present in rubric {rubric_id}")
 
+        learner_signal = episode.get("learner_signal")
+        if learner_signal is not None:
+            validator.require(isinstance(learner_signal, dict), f"episode {episode_id}: learner_signal must be an object")
+            if isinstance(learner_signal, dict):
+                signal = learner_signal.get("signal")
+                validator.require(signal in KNOWN_LEARNER_SIGNALS,
+                                  f"episode {episode_id}: invalid learner_signal.signal {signal}")
+                for key in ("attempts", "successes", "friction"):
+                    value = learner_signal.get(key)
+                    if value is not None:
+                        validator.require(type(value) is int and value >= 0,
+                                          f"episode {episode_id}: learner_signal.{key} must be a non-negative integer")
+
         next_ids = episode.get("next", [])
         if not isinstance(next_ids, list):
             validator.error(f"episode {episode_id}: next must be an array")
@@ -328,6 +377,7 @@ def validate_pack(pack_dir: Path) -> tuple[Validator, dict[str, int]]:
     size = pack_size_bytes(pack_dir)
     if size > limits["max_pack_bytes"]:
         validator.error(f"pack size {size} bytes exceeds {limits['max_pack_bytes']} bytes")
+    validate_jsonl_line_sizes(pack_dir, limits, validator)
 
     concept_by_id = validate_concepts(concepts, validator)
     rubric_by_id = validate_rubrics(rubrics, limits, validator)

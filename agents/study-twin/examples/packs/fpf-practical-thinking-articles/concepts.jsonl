@@ -1,0 +1,7 @@
+{"id":"fpf.practical.signal","label":"Сигнал к работе","kind":"concept","summary":"Перед действием нужно понять, что именно заставило нас работать: сбой, возможность, вопрос для проверки или слабый намек.","tags":["fpf","thinking"]}
+{"id":"fpf.practical.boundary","label":"Граница работы","kind":"skill","summary":"Полезная задача имеет область, контекст и честное вне области, иначе расползается.","tags":["fpf","management"]}
+{"id":"fpf.practical.done","label":"Наблюдаемая готовность","kind":"skill","summary":"Done означает проверяемое состояние мира, а не ощущение, что мы достаточно поработали.","tags":["fpf","verification"]}
+{"id":"fpf.practical.evidence","label":"Доказательное поведение","kind":"skill","summary":"Для рабочих утверждений нужно отличать наблюдение, интерпретацию, решение и ставку.","tags":["fpf","evidence"]}
+{"id":"fpf.practical.rivals","label":"Конкурирующие объяснения","kind":"skill","summary":"Пока есть несколько правдоподобных причин, нельзя вести работу так, будто причина уже доказана.","tags":["fpf","debugging"]}
+{"id":"fpf.practical.metric","label":"Метрика не цель","kind":"misconception","summary":"Метрика полезна как индикатор роли, но опасна, если тайно становится целью.","tags":["fpf","management"]}
+{"id":"fpf.practical.decision","label":"Память решения","kind":"skill","summary":"Решение должно оставить след: почему выбрали, что должно остаться истинным, что проверим потом.","tags":["fpf","decision"]}

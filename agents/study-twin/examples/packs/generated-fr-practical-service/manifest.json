@@ -1,0 +1,43 @@
+{
+  "schema": "biscuit.study-pack.v0",
+  "pack_id": "generated-fr-practical-service",
+  "title": "Generated: Practical French Service Communication",
+  "description": "Generated from course source fr-practical-service assessment seeds.",
+  "revision": "2026-05-18.generated",
+  "language": "ru",
+  "entry_episode_id": "fr.seed.book-haircut-tomorrow",
+  "generator": {
+    "id": "study-twin-course-compiler",
+    "version": "0.1.0",
+    "policy": "assessment-seed-v0"
+  },
+  "files": {
+    "concepts": "concepts.jsonl",
+    "episodes": "episodes.jsonl",
+    "rubrics": "rubrics.jsonl",
+    "assets_dir": "assets"
+  },
+  "counts": {
+    "concepts": 3,
+    "episodes": 3,
+    "rubrics": 2
+  },
+  "constraints": {
+    "max_pack_bytes": 524288,
+    "max_prompt_chars": 900,
+    "max_reveal_chars": 1200,
+    "max_rubric_chars": 1200
+  },
+  "runtime_targets": [
+    "m5paper",
+    "mac"
+  ],
+  "sources": [
+    {
+      "id": "course-fr-practical-service",
+      "type": "manual",
+      "title": "Course source: fr-practical-service",
+      "citation": "/Users/geni/Projects/biscuit/agents/study-twin/courses/fr-practical-service"
+    }
+  ]
+}

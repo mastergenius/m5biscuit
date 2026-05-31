@@ -1,0 +1,50 @@
+{
+  "schema": "biscuit.study-pack.v0",
+  "pack_id": "mim-trusted-with-complexity",
+  "title": "МИМ: сложность, которую можно доверить",
+  "description": "Диагностический pack по агентности, масштабу и методологической дисциплине: не курс ради курса, а доказательство способности брать сложность.",
+  "revision": "2026-05-24.mim.1",
+  "language": "ru",
+  "entry_episode_id": "mim-trusted-with-complexity.e01",
+  "generator": {
+    "id": "mim-qualification-pack-manual",
+    "version": "0.1.0",
+    "policy": "trusted-complexity-anchor"
+  },
+  "files": {
+    "concepts": "concepts.jsonl",
+    "episodes": "episodes.jsonl",
+    "rubrics": "rubrics.jsonl",
+    "assets_dir": "assets"
+  },
+  "counts": {
+    "concepts": 6,
+    "episodes": 8,
+    "rubrics": 4
+  },
+  "constraints": {
+    "max_pack_bytes": 524288,
+    "max_prompt_chars": 1400,
+    "max_reveal_chars": 1800,
+    "max_rubric_chars": 1600,
+    "max_jsonl_line_bytes": 2200
+  },
+  "runtime_targets": [
+    "mac",
+    "m5paper"
+  ],
+  "sources": [
+    {
+      "id": "src.telegram.mim.trusted-complexity",
+      "type": "note",
+      "title": "Telegram post: MBA price and trusted complexity",
+      "citation": "User-provided Telegram post, 2026-05-24"
+    },
+    {
+      "id": "src.mim.qualification-policy",
+      "type": "manual",
+      "title": "MIM Qualification StudyPacks",
+      "citation": "agents/study-twin/methodology/mim-qualification-packs.md"
+    }
+  ]
+}

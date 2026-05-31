@@ -1,0 +1,4 @@
+{"id":"mim-modeling-basics.c.model","label":"Модель","kind":"concept","summary":"Модель — рабочее представление, помогающее агенту действовать, объяснять или предсказывать.","tags":["mim","mac-first"]}
+{"id":"mim-modeling-basics.c.object","label":"Объект внимания","kind":"concept","summary":"Объект нужно выделить так, чтобы с ним можно было работать в роли.","tags":["mim","mac-first"]}
+{"id":"mim-modeling-basics.c.role","label":"Роль моделирования","kind":"concept","summary":"Разные роли строят разные модели одной ситуации.","tags":["mim","mac-first"]}
+{"id":"mim-modeling-basics.c.product-use","label":"Продукт и использование","kind":"concept","summary":"Моделировать нужно не только продукт, но и его использование в окружении.","tags":["mim","mac-first"]}

@@ -1,0 +1,43 @@
+{
+  "schema": "biscuit.study-pack.v0",
+  "pack_id": "mim-modeling-basics",
+  "title": "МИМ Learning: основы моделирования",
+  "description": "Кто моделирует, что моделируется и зачем объектная идентификация.",
+  "revision": "2026-05-24.mim.1",
+  "language": "ru",
+  "entry_episode_id": "mim-modeling-basics.e01",
+  "generator": {
+    "id": "mim-learning-pack-generator",
+    "version": "0.1.0",
+    "policy": "mac-first-paraphrased-course-themes"
+  },
+  "files": {
+    "concepts": "concepts.jsonl",
+    "episodes": "episodes.jsonl",
+    "rubrics": "rubrics.jsonl",
+    "assets_dir": "assets"
+  },
+  "counts": {
+    "concepts": 4,
+    "episodes": 6,
+    "rubrics": 3
+  },
+  "constraints": {
+    "max_pack_bytes": 524288,
+    "max_prompt_chars": 1400,
+    "max_reveal_chars": 1800,
+    "max_rubric_chars": 1600,
+    "max_jsonl_line_bytes": 2200
+  },
+  "runtime_targets": [
+    "mac"
+  ],
+  "sources": [
+    {
+      "id": "src.mim-modeling-basics",
+      "type": "manual",
+      "title": "R2 Моделирование: основы моделирования",
+      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/modeling-1/basics-of-modeling"
+    }
+  ]
+}

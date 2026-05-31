@@ -1,0 +1,7 @@
+{"id":"fr.service.appointment","label":"Запись на услугу","kind":"skill","summary":"Сценарий записи: запросить rendez-vous, указать услугу, день/время и подтвердить слот.","tags":["fr","a1","service"]}
+{"id":"fr.sentence.request","label":"Запрос через je voudrais","kind":"phrase","summary":"Je voudrais позволяет собирать вежливые бытовые запросы без сложной грамматики.","tags":["fr","a1","pattern"]}
+{"id":"fr.time.slot","label":"Слот времени","kind":"concept","summary":"Для записи нужны demain, aujourd'hui, ce matin, cet apres-midi, a 15h, lundi.","tags":["fr","a1","time"]}
+{"id":"fr.haircut.vocab","label":"Слова для стрижки","kind":"concept","summary":"Базовые элементы: une coupe, les cotes, derriere, devant, la frange, court, long.","tags":["fr","a1","haircut"]}
+{"id":"fr.degree.preference","label":"Степень и ограничение","kind":"skill","summary":"Un peu, plus, moins, pas trop позволяют задавать степень без сложных предложений.","tags":["fr","a1","grammar"]}
+{"id":"fr.process.feedback","label":"Фидбек в процессе","kind":"skill","summary":"Во время услуги нужны короткие управляющие фразы: c'est bien, un peu plus court, pas trop court.","tags":["fr","a1","service"]}
+{"id":"fr.repair.confirm","label":"Ремонт и подтверждение","kind":"phrase","summary":"Vous pouvez repeter ? и Vous pouvez montrer ? помогают не терять контроль, когда непонятно.","tags":["fr","a1","repair"]}

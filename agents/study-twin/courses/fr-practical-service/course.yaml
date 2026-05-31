@@ -1,0 +1,23 @@
+id: fr-practical-service
+type: course
+domain: practical-french
+title: Practical French Service Communication
+language: ru
+target_media:
+  - m5paper
+  - mac
+  - ipad
+goals:
+  - book simple service appointments
+  - build short everyday French sentences from reusable slots
+  - repair misunderstanding without freezing
+  - turn service situations into personal scripts
+goldilocks:
+  base: understands operator-plus-slot sentence construction
+  stretch: can adapt the pattern to a new service situation
+  probes:
+    - can select a socially appropriate phrase, not only grammatically possible phrase
+    - can choose repair instead of pretending to understand
+source_packs:
+  - fr-a1-haircut-service-articles
+  - fr-a1-sentence-builder

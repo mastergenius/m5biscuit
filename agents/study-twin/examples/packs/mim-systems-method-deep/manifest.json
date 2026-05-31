@@ -1,0 +1,37 @@
+{
+  "schema": "biscuit.study-pack.v0",
+  "pack_id": "mim-systems-method-deep",
+  "title": "МИМ: методический взгляд на сложную ситуацию",
+  "description": "Короткий глубокий трек про первый методический ход: цель, роли, ограничения, evidence и риск неуспешности.",
+  "revision": "2026-05-27.mim.2",
+  "language": "ru",
+  "entry_episode_id": "mim-systems-method-deep.e01",
+  "generator": {
+    "id": "manual-rich-case-pack",
+    "version": "2026-05-27",
+    "policy": "case-first nuanced options"
+  },
+  "files": {
+    "concepts": "concepts.jsonl",
+    "episodes": "episodes.jsonl",
+    "rubrics": "rubrics.jsonl"
+  },
+  "counts": {
+    "concepts": 8,
+    "episodes": 10,
+    "rubrics": 2
+  },
+  "constraints": {
+    "max_prompt_chars": 900,
+    "max_reveal_chars": 1200,
+    "max_jsonl_line_bytes": 2200
+  },
+  "runtime_targets": ["m5paper", "mac"],
+  "sources": [
+    {
+      "id": "src.mim.methodological-thinking",
+      "type": "manual",
+      "title": "МИМ: методологическая дисциплина, агентность, масштаб"
+    }
+  ]
+}

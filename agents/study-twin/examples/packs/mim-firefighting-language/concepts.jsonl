@@ -1,0 +1,4 @@
+{"id":"mim-firefighting-language.c.language","label":"Язык общения","kind":"concept","summary":"Язык задает различения, доступные роли и качество координации.","tags":["mim","mac-first"]}
+{"id":"mim-firefighting-language.c.pragmatics","label":"Прагматика","kind":"concept","summary":"Высказывание не только описывает, но и делает работу: просит, фиксирует, проверяет, передает роль.","tags":["mim","mac-first"]}
+{"id":"mim-firefighting-language.c.implicit","label":"Неявное содержание","kind":"concept","summary":"Импликатуры и скрытые роли могут сломать координацию без явного конфликта.","tags":["mim","mac-first"]}
+{"id":"mim-firefighting-language.c.reference","label":"Референция","kind":"concept","summary":"Сначала надо понять, о чем речь, затем спорить об истинности.","tags":["mim","mac-first"]}

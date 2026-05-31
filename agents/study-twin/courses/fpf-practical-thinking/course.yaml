@@ -1,0 +1,24 @@
+id: fpf-practical-thinking
+type: course
+domain: engineering-management-thinking
+title: FPF Practical Thinking
+language: ru
+target_media:
+  - m5paper
+  - mac
+  - ipad
+goals:
+  - frame ambiguous project work
+  - keep scope and done observable
+  - use evidence instead of plausible stories
+  - prevent metrics from stealing the goal
+  - preserve decision memory
+goldilocks:
+  base: can name signal-boundary-done for one task
+  stretch: can apply the model to a live Biscuit technical/product issue
+  probes:
+    - can avoid turning FPF into jargon recall
+    - can keep competing explanations during incidents
+source_packs:
+  - fpf-practical-thinking-articles
+  - fpf-management-drills

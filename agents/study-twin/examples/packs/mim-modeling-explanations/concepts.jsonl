@@ -1,0 +1,4 @@
+{"id":"mim-modeling-explanations.c.explanation","label":"Объяснение","kind":"concept","summary":"Объяснение связывает наблюдения, модель и причинный механизм.","tags":["mim","mac-first"]}
+{"id":"mim-modeling-explanations.c.belief","label":"Убеждение","kind":"concept","summary":"Убеждение агента может быть полезным или ложным; его надо отделять от наблюдений.","tags":["mim","mac-first"]}
+{"id":"mim-modeling-explanations.c.prediction","label":"Предсказание","kind":"concept","summary":"Сильное объяснение дает ожидания, которые можно проверить.","tags":["mim","mac-first"]}
+{"id":"mim-modeling-explanations.c.evaluate","label":"Оценка объяснения","kind":"concept","summary":"Объяснение оценивается по связности, проверяемости и полезности для действия.","tags":["mim","mac-first"]}
