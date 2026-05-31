@@ -37,10 +37,10 @@
       "citation": "agents/study-twin/courses/fpf-practical-thinking/"
     },
     {
-      "id": "haft-fpf-search-2026-05-18",
+      "id": "local-fpf-corpus-2026-05-18",
       "type": "note",
-      "title": "Локальная выборка haft fpf по FRAME, CHR, EXP и DEC",
-      "citation": "haft fpf search: signal explicitness, scope/boundary, acceptance criteria, indicator roles, weakest link, decision predictions."
+      "title": "Локальная выборка local FPF corpus по FRAME, CHR, EXP и DEC",
+      "citation": "local FPF corpus search: signal explicitness, scope/boundary, acceptance criteria, indicator roles, weakest link, decision predictions."
     }
   ]
 }

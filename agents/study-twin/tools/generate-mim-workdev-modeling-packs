@@ -14,7 +14,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKS_DIR = ROOT / "examples" / "packs"
-SOURCE_ROOT = "/Users/geni/Brain/docs-courses/docs/ru/professional"
+SOURCE_ROOT = "mim://docs-courses/ru/professional"
 
 
 def src(source_id: str, title: str, path: str) -> dict[str, str]:

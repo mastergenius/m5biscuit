@@ -35,67 +35,67 @@
       "id": "src.mim.systems.universal",
       "type": "note",
       "title": "Системное мышление как универсальное",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/systems-thinking/about-thinking/systems-thinking-as-a-strong-universal-common-approach.md"
+      "citation": "mim://docs-courses/ru/professional/systems-thinking/about-thinking/systems-thinking-as-a-strong-universal-common-approach.md"
     },
     {
       "id": "src.mim.systems.mantra",
       "type": "note",
       "title": "Мантра системного мышления",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/systems-thinking/methods-functions-practices-activities-cultures-work-methods-and-roles/mantra-of-systems-thinking.md"
+      "citation": "mim://docs-courses/ru/professional/systems-thinking/methods-functions-practices-activities-cultures-work-methods-and-roles/mantra-of-systems-thinking.md"
     },
     {
       "id": "src.mim.systems.target-to-role",
       "type": "note",
       "title": "От целевой системы к роли создателя",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/systems-thinking/methods-functions-practices-activities-cultures-work-methods-and-roles/from-system-of-interest-to-work-method-to-creator-role-not-vice-versa.md"
+      "citation": "mim://docs-courses/ru/professional/systems-thinking/methods-functions-practices-activities-cultures-work-methods-and-roles/from-system-of-interest-to-work-method-to-creator-role-not-vice-versa.md"
     },
     {
       "id": "src.mim.systems.system-of-interest",
       "type": "note",
       "title": "Сначала найти целевую систему",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/systems-modeling/system-of-interest-and-its-supersystem/first-identify-the-system-of-interest.md"
+      "citation": "mim://docs-courses/ru/professional/systems-modeling/system-of-interest-and-its-supersystem/first-identify-the-system-of-interest.md"
     },
     {
       "id": "src.mim.systems.supersystem",
       "type": "note",
       "title": "Надсистема: ее тоже нужно выявить",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/systems-modeling/system-of-interest-and-its-supersystem/supersystem-it-must-also-be-identified.md"
+      "citation": "mim://docs-courses/ru/professional/systems-modeling/system-of-interest-and-its-supersystem/supersystem-it-must-also-be-identified.md"
     },
     {
       "id": "src.mim.systems.system-of-interest-errors",
       "type": "note",
       "title": "Ошибки выявления целевой системы",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/systems-modeling/system-of-interest-and-its-supersystem/common-mistakes-in-identifying-the-system-of-interest.md"
+      "citation": "mim://docs-courses/ru/professional/systems-modeling/system-of-interest-and-its-supersystem/common-mistakes-in-identifying-the-system-of-interest.md"
     },
     {
       "id": "src.mim.systems.breakdown",
       "type": "note",
       "title": "Системное разбиение",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/systems-modeling/system-levels/system-breakdown.md"
+      "citation": "mim://docs-courses/ru/professional/systems-modeling/system-levels/system-breakdown.md"
     },
     {
       "id": "src.mim.systems.emergence",
       "type": "note",
       "title": "Эмерджентность и системный переход",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/systems-modeling/system-levels/emergence-and-meta-system-transition.md"
+      "citation": "mim://docs-courses/ru/professional/systems-modeling/system-levels/emergence-and-meta-system-transition.md"
     },
     {
       "id": "src.mim.systems.descriptions",
       "type": "note",
       "title": "Четыре основных вида описания системы",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/systems-modeling/how-to-describe-systems/four-main-types-of-system-descriptions-based-on-four-system-breakdown-methods.md"
+      "citation": "mim://docs-courses/ru/professional/systems-modeling/how-to-describe-systems/four-main-types-of-system-descriptions-based-on-four-system-breakdown-methods.md"
     },
     {
       "id": "src.mim.systems.interests",
       "type": "note",
       "title": "Предметы интереса и интересы",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/systems-thinking/interests/subjects-of-interest-and-interests.md"
+      "citation": "mim://docs-courses/ru/professional/systems-thinking/interests/subjects-of-interest-and-interests.md"
     },
     {
       "id": "src.mim.systems.concern-preference",
       "type": "note",
       "title": "Не склеивайте характеристику и предпочтение",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/systems-thinking/interests/do-not-conflate-important-characteristics-and-preferences.md"
+      "citation": "mim://docs-courses/ru/professional/systems-thinking/interests/do-not-conflate-important-characteristics-and-preferences.md"
     }
   ]
 }

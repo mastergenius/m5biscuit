@@ -37,7 +37,7 @@
       "id": "src.mim-modeling-explanations",
       "type": "manual",
       "title": "R2 Моделирование: создание и доставка объяснений",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/modeling-1/creation-and-delivery-of-explanations"
+      "citation": "mim://docs-courses/ru/professional/modeling-1/creation-and-delivery-of-explanations"
     }
   ]
 }

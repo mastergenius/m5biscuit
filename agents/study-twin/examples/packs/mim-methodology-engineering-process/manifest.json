@@ -37,7 +37,7 @@
       "id": "src.mim-methodology-engineering-process",
       "type": "manual",
       "title": "R7 Методология: инженерные процессы и методы разработки",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/methodology/engineering-processes-development-methods"
+      "citation": "mim://docs-courses/ru/professional/methodology/engineering-processes-development-methods"
     }
   ]
 }

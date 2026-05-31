@@ -35,19 +35,19 @@
       "id": "src.mim.modeling.dynamic-objects",
       "type": "note",
       "title": "Моделирование: динамический анализ объектов",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/modeling-1/attention-retention/dynamic-analysis-of-objects.md"
+      "citation": "mim://docs-courses/ru/professional/modeling-1/attention-retention/dynamic-analysis-of-objects.md"
     },
     {
       "id": "src.mim.modeling.state-changes",
       "type": "note",
       "title": "Моделирование: изменения состояний объектов",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/modeling-1/attention-retention/state-changes-of-objects.md"
+      "citation": "mim://docs-courses/ru/professional/modeling-1/attention-retention/state-changes-of-objects.md"
     },
     {
       "id": "src.mim.modeling.thinking",
       "type": "note",
       "title": "Моделирование: мышление и модели",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/modeling-1/basics-of-modeling/thinking-and-modeling.md"
+      "citation": "mim://docs-courses/ru/professional/modeling-1/basics-of-modeling/thinking-and-modeling.md"
     }
   ]
 }

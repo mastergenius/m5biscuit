@@ -145,7 +145,7 @@ Choose the follow-up you want:
 - make a deeper case;
 - make a workbook;
 - connect to project;
-- turn into a Brain/Obsidian note.
+- turn into a knowledge base/Obsidian note.
 
 Selected follow-up:
 

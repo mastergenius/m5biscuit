@@ -35,19 +35,19 @@
       "id": "src.mim.modeling.explanations",
       "type": "note",
       "title": "Моделирование: создание объяснений",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/modeling-1/creation-and-delivery-of-explanations/creating-explanations.md"
+      "citation": "mim://docs-courses/ru/professional/modeling-1/creation-and-delivery-of-explanations/creating-explanations.md"
     },
     {
       "id": "src.mim.modeling.predictions",
       "type": "note",
       "title": "Моделирование: предсказания и допущения",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/modeling-1/creation-and-delivery-of-explanations/predictions-and-assumptions.md"
+      "citation": "mim://docs-courses/ru/professional/modeling-1/creation-and-delivery-of-explanations/predictions-and-assumptions.md"
     },
     {
       "id": "src.mim.modeling.explanation-quality",
       "type": "note",
       "title": "Моделирование: оценка объяснений",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/modeling-1/creation-and-delivery-of-explanations/how-to-evaluate-an-explanation.md"
+      "citation": "mim://docs-courses/ru/professional/modeling-1/creation-and-delivery-of-explanations/how-to-evaluate-an-explanation.md"
     }
   ]
 }

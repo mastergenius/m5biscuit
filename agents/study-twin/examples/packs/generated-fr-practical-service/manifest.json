@@ -37,7 +37,7 @@
       "id": "course-fr-practical-service",
       "type": "manual",
       "title": "Course source: fr-practical-service",
-      "citation": "/Users/geni/Projects/biscuit/agents/study-twin/courses/fr-practical-service"
+      "citation": "course://fr-practical-service"
     }
   ]
 }

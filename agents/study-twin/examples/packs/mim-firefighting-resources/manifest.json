@@ -37,7 +37,7 @@
       "id": "src.mim-firefighting-resources",
       "type": "manual",
       "title": "R1 Распожаризация: отслеживать трату ресурсов",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/firefighting/track-resource-expenditure-for-task-execution"
+      "citation": "mim://docs-courses/ru/professional/firefighting/track-resource-expenditure-for-task-execution"
     }
   ]
 }

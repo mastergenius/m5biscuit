@@ -163,7 +163,7 @@ PACKS: list[dict[str, Any]] = [
         "id": "mim-methodology-method-stack",
         "title": "МИМ Learning: метод как объект",
         "description": "Метод, стек методов и выбор метода как инженерное действие.",
-        "source": "/Users/geni/Brain/docs-courses/docs/ru/professional/methodology/methodology-as-a-fundamental-method-of-thinking",
+        "source": "mim://docs-courses/ru/professional/methodology/methodology-as-a-fundamental-method-of-thinking",
         "source_title": "R7 Методология: методология как фундаментальный метод мышления",
         "concepts": [
             ("method", "Метод", "Метод рассматривается как воспроизводимый способ работы агента, а не как лозунг или список этапов."),
@@ -185,7 +185,7 @@ PACKS: list[dict[str, Any]] = [
         "id": "mim-methodology-lifecycle-work",
         "title": "МИМ Learning: развитие без life-cycle",
         "description": "Система, создатели, состояния и методологическое время вместо стадийного мифа.",
-        "source": "/Users/geni/Brain/docs-courses/docs/ru/professional/methodology/creation-and-development-not-life-not-cycle",
+        "source": "mim://docs-courses/ru/professional/methodology/creation-and-development-not-life-not-cycle",
         "source_title": "R7 Методология: создание и развитие, а не жизненный цикл",
         "concepts": [
             ("system", "Система интереса", "Развитие обсуждается относительно системы интереса и ее состояний, а не абстрактного проекта."),
@@ -207,7 +207,7 @@ PACKS: list[dict[str, Any]] = [
         "id": "mim-methodology-engineering-process",
         "title": "МИМ Learning: инженерный процесс",
         "description": "Различение управления работами и управления инженерным процессом.",
-        "source": "/Users/geni/Brain/docs-courses/docs/ru/professional/methodology/engineering-processes-development-methods",
+        "source": "mim://docs-courses/ru/professional/methodology/engineering-processes-development-methods",
         "source_title": "R7 Методология: инженерные процессы и методы разработки",
         "concepts": [
             ("process", "Инженерный процесс", "Процесс разработки — метод преобразования неопределенности в работающую систему."),
@@ -229,7 +229,7 @@ PACKS: list[dict[str, Any]] = [
         "id": "mim-firefighting-grounding",
         "title": "МИМ Learning: заземление реальности",
         "description": "Различать систему, описание и действие, чтобы не тушить фантомные пожары.",
-        "source": "/Users/geni/Brain/docs-courses/docs/ru/professional/firefighting/distinguish-systems-and-their-representations-and-ground-yourself",
+        "source": "mim://docs-courses/ru/professional/firefighting/distinguish-systems-and-their-representations-and-ground-yourself",
         "source_title": "R1 Распожаризация: системы и представления",
         "concepts": [
             ("reality", "Физическая реальность", "Работать нужно с системами и событиями, а не только с реконструкцией в голове."),
@@ -251,7 +251,7 @@ PACKS: list[dict[str, Any]] = [
         "id": "mim-firefighting-resources",
         "title": "МИМ Learning: ресурсы и операционка",
         "description": "Отслеживать расход ресурсов, роли и view операционного менеджера.",
-        "source": "/Users/geni/Brain/docs-courses/docs/ru/professional/firefighting/track-resource-expenditure-for-task-execution",
+        "source": "mim://docs-courses/ru/professional/firefighting/track-resource-expenditure-for-task-execution",
         "source_title": "R1 Распожаризация: отслеживать трату ресурсов",
         "concepts": [
             ("resource", "Ресурс", "Ресурс расходуется или резервируется при выполнении работы: время, внимание, энергия, память, деньги."),
@@ -273,7 +273,7 @@ PACKS: list[dict[str, Any]] = [
         "id": "mim-firefighting-method-work",
         "title": "МИМ Learning: метод и работа",
         "description": "Отделять поведение агента, метод и выполняемую работу.",
-        "source": "/Users/geni/Brain/docs-courses/docs/ru/professional/firefighting/distinguishing-between-an-agent-s-method-and-work",
+        "source": "mim://docs-courses/ru/professional/firefighting/distinguishing-between-an-agent-s-method-and-work",
         "source_title": "R1 Распожаризация: метод и работа агента",
         "concepts": [
             ("agent", "Агент", "Агент действует по методу, тратит ресурсы и меняет системы."),
@@ -295,7 +295,7 @@ PACKS: list[dict[str, Any]] = [
         "id": "mim-firefighting-language",
         "title": "МИМ Learning: язык работы",
         "description": "Выбирать язык общения под роль, смысл и рабочее действие.",
-        "source": "/Users/geni/Brain/docs-courses/docs/ru/professional/firefighting/communicate-in-the-correctly-chosen-language",
+        "source": "mim://docs-courses/ru/professional/firefighting/communicate-in-the-correctly-chosen-language",
         "source_title": "R1 Распожаризация: общаться на правильно выбранном языке",
         "concepts": [
             ("language", "Язык общения", "Язык задает различения, доступные роли и качество координации."),
@@ -317,7 +317,7 @@ PACKS: list[dict[str, Any]] = [
         "id": "mim-modeling-basics",
         "title": "МИМ Learning: основы моделирования",
         "description": "Кто моделирует, что моделируется и зачем объектная идентификация.",
-        "source": "/Users/geni/Brain/docs-courses/docs/ru/professional/modeling-1/basics-of-modeling",
+        "source": "mim://docs-courses/ru/professional/modeling-1/basics-of-modeling",
         "source_title": "R2 Моделирование: основы моделирования",
         "concepts": [
             ("model", "Модель", "Модель — рабочее представление, помогающее агенту действовать, объяснять или предсказывать."),
@@ -339,7 +339,7 @@ PACKS: list[dict[str, Any]] = [
         "id": "mim-modeling-communication",
         "title": "МИМ Learning: модели в коммуникации",
         "description": "Использовать модели для лидерства, аргументации и работы с ролями.",
-        "source": "/Users/geni/Brain/docs-courses/docs/ru/professional/modeling-1/communication-and-leadership",
+        "source": "mim://docs-courses/ru/professional/modeling-1/communication-and-leadership",
         "source_title": "R2 Моделирование: коммуникация и лидерство",
         "concepts": [
             ("epistemic", "Эпистемическое состояние", "В коммуникации важно, что знает, предполагает и не видит другой агент."),
@@ -361,7 +361,7 @@ PACKS: list[dict[str, Any]] = [
         "id": "mim-modeling-explanations",
         "title": "МИМ Learning: объяснения",
         "description": "Создавать и оценивать объяснения, а не только утверждения.",
-        "source": "/Users/geni/Brain/docs-courses/docs/ru/professional/modeling-1/creation-and-delivery-of-explanations",
+        "source": "mim://docs-courses/ru/professional/modeling-1/creation-and-delivery-of-explanations",
         "source_title": "R2 Моделирование: создание и доставка объяснений",
         "concepts": [
             ("explanation", "Объяснение", "Объяснение связывает наблюдения, модель и причинный механизм."),
@@ -383,7 +383,7 @@ PACKS: list[dict[str, Any]] = [
         "id": "mim-selfdev-attention-time",
         "title": "МИМ Learning: внимание и время",
         "description": "Собранность, важное/срочное и инвестирование времени.",
-        "source": "/Users/geni/Brain/docs-courses/docs/ru/personal/1-1-self-development/03-composure-and-attention",
+        "source": "mim://docs-courses/ru/personal/1-1-self-development/03-composure-and-attention",
         "source_title": "Системное саморазвитие: собранность и внимание",
         "concepts": [
             ("attention", "Внимание", "Внимание — ограниченный ресурс управления действием и обучением."),
@@ -405,7 +405,7 @@ PACKS: list[dict[str, Any]] = [
         "id": "mim-selfdev-role-mastery",
         "title": "МИМ Learning: роль и мастерство",
         "description": "Ролевые интересы, методы, практики и рост мастерства.",
-        "source": "/Users/geni/Brain/docs-courses/docs/ru/personal/1-1-self-development/05-role-role-mastery-and-method",
+        "source": "mim://docs-courses/ru/personal/1-1-self-development/05-role-role-mastery-and-method",
         "source_title": "Системное саморазвитие: роль, мастерство и метод",
         "concepts": [
             ("role", "Роль", "Роль задает интересы, ответственность и язык оценки действия."),
@@ -427,7 +427,7 @@ PACKS: list[dict[str, Any]] = [
         "id": "mim-selfdev-trajectory",
         "title": "МИМ Learning: траектория развития",
         "description": "Личная траектория, бесконечное развитие и культура МИМ.",
-        "source": "/Users/geni/Brain/docs-courses/docs/ru/personal/1-1-self-development/09-personal-development-trajectory",
+        "source": "mim://docs-courses/ru/personal/1-1-self-development/09-personal-development-trajectory",
         "source_title": "Системное саморазвитие: личная траектория развития",
         "concepts": [
             ("trajectory", "Траектория", "Траектория связывает текущие практики с долгосрочным развитием агента."),
@@ -449,7 +449,7 @@ PACKS: list[dict[str, Any]] = [
         "id": "mim-cross-course-diagnostics",
         "title": "МИМ Learning: диагностический микс",
         "description": "Смешанные ситуации из методологии, распожаризации, моделирования и саморазвития.",
-        "source": "/Users/geni/Brain/docs-courses/docs/ru",
+        "source": "mim://docs-courses/ru",
         "source_title": "МИМ: cross-course diagnostic mix",
         "concepts": [
             ("distinguish", "Различение", "Сильное мышление начинается с правильного различения объектов, ролей и описаний."),

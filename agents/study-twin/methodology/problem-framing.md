@@ -46,7 +46,7 @@ The contradiction is the signal: runtime completion is not evidence of useful le
 
 `Carriers`
 : M5Paper screens, JSONL StudyPacks, web/iOS UI, Mac agent state, PDF workbooks, printed paper,
-  scans/photos, Obsidian/Brain notes, and project artifacts.
+  scans/photos, Obsidian or knowledge-base notes, and project artifacts.
 
 The carriers may look complete while the target object is not improving. Evidence must therefore
 refer back to capability, not only to carrier success.

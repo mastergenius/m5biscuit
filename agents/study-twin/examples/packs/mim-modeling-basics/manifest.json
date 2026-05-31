@@ -37,7 +37,7 @@
       "id": "src.mim-modeling-basics",
       "type": "manual",
       "title": "R2 Моделирование: основы моделирования",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/modeling-1/basics-of-modeling"
+      "citation": "mim://docs-courses/ru/professional/modeling-1/basics-of-modeling"
     }
   ]
 }

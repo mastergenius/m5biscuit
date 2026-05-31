@@ -99,7 +99,7 @@ curl http://biscuit.local/api/device
 ```json
 {
   "v": 0,
-  "device_id": "m5paper-5c013b0db9b0",
+  "device_id": "m5paper-example",
   "device_type": "m5paper",
   "name": "M5Paper",
   "firmware": "0.1.0-m5paper+master",
@@ -152,7 +152,7 @@ curl -H "Authorization: Bearer $TOKEN" http://biscuit.local/api/status
 ```json
 {
   "v": 0,
-  "device_id": "m5paper-5c013b0db9b0",
+  "device_id": "m5paper-example",
   "device_type": "m5paper",
   "version": "1.0.0",
   "ip": "192.168.1.100",
@@ -205,7 +205,7 @@ curl -H "Authorization: Bearer $TOKEN" http://biscuit.local/api/events
 ```json
 {
   "v": 0,
-  "device_id": "m5paper-5c013b0db9b0",
+  "device_id": "m5paper-example",
   "snapshot": true,
   "events": [
     {

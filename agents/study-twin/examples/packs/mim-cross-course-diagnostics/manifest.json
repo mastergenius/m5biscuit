@@ -37,7 +37,7 @@
       "id": "src.mim-cross-course-diagnostics",
       "type": "manual",
       "title": "МИМ: cross-course diagnostic mix",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru"
+      "citation": "mim://docs-courses/ru"
     }
   ]
 }

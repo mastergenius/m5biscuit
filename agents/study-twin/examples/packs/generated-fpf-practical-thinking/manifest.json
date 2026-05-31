@@ -37,7 +37,7 @@
       "id": "course-fpf-practical-thinking",
       "type": "manual",
       "title": "Course source: fpf-practical-thinking",
-      "citation": "/Users/geni/Projects/biscuit/agents/study-twin/courses/fpf-practical-thinking"
+      "citation": "course://fpf-practical-thinking"
     }
   ]
 }

@@ -140,7 +140,7 @@ Push generated packs to a paired device and pull review logs:
 
 ```bash
 python3 agents/study-twin/tools/device-sync \
-  --url 'http://192.168.1.149/?token=<session-token>' \
+  --url 'http://<device-ip>/?token=<session-token>' \
   --remember \
   sync-current
 

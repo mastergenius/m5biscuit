@@ -35,25 +35,25 @@
       "id": "src.mim.modeling.epistemic-state",
       "type": "note",
       "title": "Моделирование: эпистемическое состояние агентов",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/modeling-1/communication-and-leadership/epistemic-state-of-agents.md"
+      "citation": "mim://docs-courses/ru/professional/modeling-1/communication-and-leadership/epistemic-state-of-agents.md"
     },
     {
       "id": "src.mim.modeling.communication-advantage",
       "type": "note",
       "title": "Моделирование: модели в коммуникации",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/modeling-1/communication-and-leadership/how-to-use-models-to-create-an-advantage-in-communication-situations.md"
+      "citation": "mim://docs-courses/ru/professional/modeling-1/communication-and-leadership/how-to-use-models-to-create-an-advantage-in-communication-situations.md"
     },
     {
       "id": "src.mim.systems.talk-to-roles",
       "type": "note",
       "title": "Разговаривайте не с людьми, а с ролями",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/systems-thinking/interests/talk-to-roles-not-people.md"
+      "citation": "mim://docs-courses/ru/professional/systems-thinking/interests/talk-to-roles-not-people.md"
     },
     {
       "id": "src.mim.systems.interests",
       "type": "note",
       "title": "Предметы интереса и интересы",
-      "citation": "/Users/geni/Brain/docs-courses/docs/ru/professional/systems-thinking/interests/subjects-of-interest-and-interests.md"
+      "citation": "mim://docs-courses/ru/professional/systems-thinking/interests/subjects-of-interest-and-interests.md"
     }
   ]
 }

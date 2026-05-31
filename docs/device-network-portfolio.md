@@ -255,7 +255,7 @@ Example envelope, intentionally transport-neutral:
 ```json
 {
   "v": 0,
-  "id": "m5paper-5c013b0db9b0",
+  "id": "m5paper-example",
   "type": "status",
   "seq": 42,
   "ts": 123456789,

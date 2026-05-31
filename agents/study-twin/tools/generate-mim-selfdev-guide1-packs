@@ -15,7 +15,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKS_DIR = ROOT / "examples" / "packs"
-SOURCE_DIR = "/Users/geni/.gemini/antigravity-cli/brain/c3f630bc-192b-4a2d-b98e-7def2c1f00ba"
+SOURCE_DIR = "mim://guide-1"
 
 GUIDE1_SOURCES = [
     {"id": "src.mim-guide1.concepts", "type": "note", "title": "Guide 1 concepts", "citation": f"{SOURCE_DIR}/guide_1_concepts.md"},

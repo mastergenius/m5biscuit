@@ -37,10 +37,10 @@
       "citation": "agents/study-twin/courses/fpf-practical-thinking/"
     },
     {
-      "id": "haft-fpf-search-2026-05-18",
+      "id": "local-fpf-corpus-2026-05-18",
       "type": "note",
-      "title": "Локальная выборка haft fpf по problem typing, rivalry, weakest link, decisions",
-      "citation": "haft fpf search: problem typing, candidate rivalry, weakest link, Pareto front, decision record, invariants, predictions."
+      "title": "Локальная выборка local FPF corpus по problem typing, rivalry, weakest link, decisions",
+      "citation": "local FPF corpus search: problem typing, candidate rivalry, weakest link, Pareto front, decision record, invariants, predictions."
     }
   ]
 }

@@ -56,5 +56,5 @@ The runtime still remains useful over plain HTTP for online mobile UI testing.
 ## Personal Context Boundary
 
 Drafts and Obsidian are not owned by this runtime. The PWA should emit ReviewEvents and explicit
-Markdown captures. Mac-side tools can then route those artifacts into Brain, Obsidian Personal, or
+Markdown captures. Mac-side tools can then route those artifacts into knowledge base, Obsidian, or
 Drafts-derived intake with provenance and review.
