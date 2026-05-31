@@ -21,7 +21,10 @@
 #include "fontIds.h"
 
 int HomeActivity::getMenuItemCount() const {
-  int count = 5;  // File Browser, Recents, File transfer, Apps, Settings
+  int count = 6;  // File Browser, Recents, Study Packs, File transfer, Apps, Settings
+#if BISCUIT_BOARD_M5PAPER
+  count++;  // Device Sync
+#endif
   if (!recentBooks.empty()) {
     count += recentBooks.size();
   }
@@ -114,16 +117,10 @@ void HomeActivity::onEnter() {
   // Create /biscuit/ directory structure on SD card if it doesn't exist
   Storage.mkdir("/biscuit");
   Storage.mkdir("/biscuit/drawings");
-  Storage.mkdir("/biscuit/pcap");
-  Storage.mkdir("/biscuit/scans");
   Storage.mkdir("/biscuit/logs");
-  Storage.mkdir("/biscuit/loot");
-  Storage.mkdir("/biscuit/loot/handshakes");
-  Storage.mkdir("/biscuit/loot/pmkid");
-  Storage.mkdir("/biscuit/loot/ble");
-  Storage.mkdir("/biscuit/loot/hashcat");
-  Storage.mkdir("/biscuit/portals");
-  Storage.mkdir("/biscuit/targets");
+  Storage.mkdir("/biscuit/study");
+  Storage.mkdir("/biscuit/study/packs");
+  Storage.mkdir("/biscuit/study/logs");
 
   // Check if OPDS browser URL is configured
   hasOpdsUrl = strlen(SETTINGS.opdsServerUrl) > 0;
@@ -206,6 +203,12 @@ void HomeActivity::loop() {
     const int fileBrowserIdx = idx++;
     const int recentsIdx = idx++;
     const int opdsLibraryIdx = hasOpdsUrl ? idx++ : -1;
+    const int studyIdx = idx++;
+#if BISCUIT_BOARD_M5PAPER
+    const int deviceSyncIdx = idx++;
+#else
+    const int deviceSyncIdx = -1;
+#endif
     const int fileTransferIdx = idx++;
     const int appsIdx = idx++;
     const int settingsIdx = idx;
@@ -218,6 +221,12 @@ void HomeActivity::loop() {
       onRecentsOpen();
     } else if (menuSelectedIndex == opdsLibraryIdx) {
       onOpdsBrowserOpen();
+    } else if (menuSelectedIndex == studyIdx) {
+      onStudyOpen();
+#if BISCUIT_BOARD_M5PAPER
+    } else if (menuSelectedIndex == deviceSyncIdx) {
+      onDeviceSyncOpen();
+#endif
     } else if (menuSelectedIndex == fileTransferIdx) {
       onFileTransferOpen();
     } else if (menuSelectedIndex == appsIdx) {
@@ -243,9 +252,16 @@ void HomeActivity::render(RenderLock&&) {
                           std::bind(&HomeActivity::storeCoverBuffer, this));
 
   // Build menu items dynamically
-  std::vector<const char*> menuItems = {tr(STR_BROWSE_FILES), tr(STR_MENU_RECENT_BOOKS), tr(STR_FILE_TRANSFER),
-                                        tr(STR_APPS), tr(STR_SETTINGS_TITLE)};
-  std::vector<UIIcon> menuIcons = {Folder, Recent, Transfer, Book, Settings};
+  std::vector<const char*> menuItems = {tr(STR_BROWSE_FILES), tr(STR_MENU_RECENT_BOOKS), "Study Packs",
+#if BISCUIT_BOARD_M5PAPER
+                                        "Device Sync",
+#endif
+                                        tr(STR_FILE_TRANSFER), tr(STR_APPS), tr(STR_SETTINGS_TITLE)};
+  std::vector<UIIcon> menuIcons = {Folder, Recent, Book,
+#if BISCUIT_BOARD_M5PAPER
+                                   Transfer,
+#endif
+                                   Transfer, Book, Settings};
 
   if (hasOpdsUrl) {
     // Insert OPDS Browser after File Browser
@@ -285,6 +301,12 @@ void HomeActivity::onRecentsOpen() { activityManager.goToRecentBooks(); }
 void HomeActivity::onSettingsOpen() { activityManager.goToSettings(); }
 
 void HomeActivity::onFileTransferOpen() { activityManager.goToFileTransfer(); }
+
+void HomeActivity::onStudyOpen() { activityManager.goToStudy(); }
+
+#if BISCUIT_BOARD_M5PAPER
+void HomeActivity::onDeviceSyncOpen() { activityManager.goToDeviceSync(); }
+#endif
 
 void HomeActivity::onAppsOpen() {
   activityManager.pushActivity(std::make_unique<AppsMenuActivity>(renderer, mappedInput));

@@ -27,6 +27,7 @@ int EpubReaderChapterSelectionActivity::getPageItems() const {
 
 void EpubReaderChapterSelectionActivity::onEnter() {
   Activity::onEnter();
+  renderer.requestFullRefreshNextDisplay();
 
   if (!epub) {
     return;

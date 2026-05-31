@@ -55,12 +55,14 @@ class HalDisplay {
   uint8_t* getFrameBuffer() const;
 
   void copyGrayscaleBuffers(const uint8_t* lsbBuffer, const uint8_t* msbBuffer);
+  void copyGrayscaleBwBuffer(const uint8_t* bwBuffer);
   void copyGrayscaleLsbBuffers(const uint8_t* lsbBuffer);
   void copyGrayscaleMsbBuffers(const uint8_t* msbBuffer);
   void cleanupGrayscaleBuffers(const uint8_t* bwBuffer);
 
   bool supportsGrayscale() const;
-  void displayGrayBuffer(bool turnOffScreen = false);
+  bool usesNativeGrayscaleFramebuffer() const;
+  void displayGrayBuffer(RefreshMode mode = RefreshMode::FAST_REFRESH, bool turnOffScreen = false);
 
   // Runtime geometry passthrough
   uint16_t getDisplayWidth() const;
@@ -71,6 +73,7 @@ class HalDisplay {
  private:
 #if BISCUIT_BOARD_M5PAPER
   uint8_t* frameBuffer = nullptr;
+  uint8_t* grayscaleBwBuffer = nullptr;
   uint8_t* grayscaleLsbBuffer = nullptr;
   uint8_t* grayscaleMsbBuffer = nullptr;
   uint16_t* nativeFrameBuffer = nullptr;

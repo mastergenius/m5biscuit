@@ -11,6 +11,9 @@
 #include <I18n.h>
 #include <Logging.h>
 #include <SPI.h>
+#if BISCUIT_BOARD_M5PAPER
+#include <WiFi.h>
+#endif
 #include <builtinFonts/all.h>
 
 #include <cstring>
@@ -283,6 +286,7 @@ void setup() {
 
 #if BISCUIT_BOARD_M5PAPER && defined(ENABLE_SERIAL_LOG)
   logSerial.begin(115200);
+  logSerial.setTimeout(50);
   delay(100);
   logSerial.printf("\n[M5PAPER][%lu] boot: serial ready heap=%u psram=%u\n", millis(), ESP.getFreeHeap(),
                    ESP.getFreePsram());
@@ -385,6 +389,8 @@ void loop() {
   static unsigned long maxLoopDuration = 0;
   const unsigned long loopStartTime = millis();
   static unsigned long lastMemPrint = 0;
+  static unsigned long lastActivityTime = millis();
+  bool serialCommandHandled = false;
 
   gpio.update();
 
@@ -410,13 +416,106 @@ void loop() {
         uint8_t* buf = display.getFrameBuffer();
         logSerial.write(buf, bufferSize);
         logSerial.printf("SCREENSHOT_END\n");
+        serialCommandHandled = true;
+      } else if (cmd == "PING") {
+        logSerial.println("OK:PONG");
+        serialCommandHandled = true;
+      } else if (cmd == "STATUS") {
+#if BISCUIT_BOARD_M5PAPER
+        const String ip = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : String("");
+        logSerial.printf("STATUS:wifi=%d,ip=%s,heap=%u,psram=%u\n", static_cast<int>(WiFi.status()), ip.c_str(),
+                         ESP.getFreeHeap(), ESP.getFreePsram());
+#else
+        logSerial.printf("STATUS:heap=%u\n", ESP.getFreeHeap());
+#endif
+        serialCommandHandled = true;
+      } else if (cmd == "HOME") {
+#if BISCUIT_BOARD_M5PAPER
+        activityManager.goHome();
+        logSerial.println("OK:HOME");
+#else
+        logSerial.println("ERR:HOME_UNAVAILABLE");
+#endif
+        serialCommandHandled = true;
+      } else if (cmd == "SETTINGS") {
+#if BISCUIT_BOARD_M5PAPER
+        activityManager.goToSettings();
+        logSerial.println("OK:SETTINGS");
+#else
+        logSerial.println("ERR:SETTINGS_UNAVAILABLE");
+#endif
+        serialCommandHandled = true;
+      } else if (cmd == "RECENT" || cmd == "RECENT_BOOKS") {
+#if BISCUIT_BOARD_M5PAPER
+        activityManager.goToRecentBooks();
+        logSerial.println("OK:RECENT");
+#else
+        logSerial.println("ERR:RECENT_UNAVAILABLE");
+#endif
+        serialCommandHandled = true;
+      } else if (cmd == "BROWSER") {
+#if BISCUIT_BOARD_M5PAPER
+        activityManager.goToBrowser();
+        logSerial.println("OK:BROWSER");
+#else
+        logSerial.println("ERR:BROWSER_UNAVAILABLE");
+#endif
+        serialCommandHandled = true;
+      } else if (cmd == "STUDY" || cmd == "STUDY_PACKS") {
+#if BISCUIT_BOARD_M5PAPER
+        activityManager.goToStudy();
+        logSerial.println("OK:STUDY");
+#else
+        logSerial.println("ERR:STUDY_UNAVAILABLE");
+#endif
+        serialCommandHandled = true;
+      } else if (cmd == "FILE_TRANSFER" || cmd == "TRANSFER") {
+#if BISCUIT_BOARD_M5PAPER
+        activityManager.goToFileTransfer();
+        logSerial.println("OK:FILE_TRANSFER");
+#else
+        logSerial.println("ERR:FILE_TRANSFER_UNAVAILABLE");
+#endif
+        serialCommandHandled = true;
+      } else if (cmd == "SYNC") {
+#if BISCUIT_BOARD_M5PAPER
+        activityManager.goToDeviceSync();
+        logSerial.println("OK:SYNC");
+#else
+        logSerial.println("ERR:SYNC_UNAVAILABLE");
+#endif
+        serialCommandHandled = true;
+      } else if (cmd == "SLEEP") {
+#if BISCUIT_BOARD_M5PAPER
+        logSerial.println("OK:SLEEP");
+        logSerial.flush();
+        serialCommandHandled = true;
+        enterDeepSleep();
+        return;
+#else
+        logSerial.println("ERR:SLEEP_UNAVAILABLE");
+        serialCommandHandled = true;
+#endif
+      } else if (cmd == "REBOOT" || cmd == "RESTART") {
+        logSerial.println("OK:REBOOT");
+        logSerial.flush();
+        delay(50);
+        ESP.restart();
+        return;
+      } else if (cmd == "HELP") {
+#if BISCUIT_BOARD_M5PAPER
+        logSerial.println(
+            "OK:CMDS=PING,STATUS,SCREENSHOT,HOME,SETTINGS,RECENT,BROWSER,STUDY,FILE_TRANSFER,SYNC,SLEEP,REBOOT");
+#else
+        logSerial.println("OK:CMDS=PING,STATUS,SCREENSHOT,REBOOT");
+#endif
+        serialCommandHandled = true;
       }
     }
   }
 
   // Check for any user activity (button press or release) or active background work
-  static unsigned long lastActivityTime = millis();
-  if (gpio.wasAnyPressed() || gpio.wasAnyReleased() || activityManager.preventAutoSleep()) {
+  if (serialCommandHandled || gpio.wasAnyPressed() || gpio.wasAnyReleased() || activityManager.preventAutoSleep()) {
     lastActivityTime = millis();         // Reset inactivity timer
     powerManager.setPowerSaving(false);  // Restore normal CPU frequency on user activity
   }

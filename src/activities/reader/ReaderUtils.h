@@ -49,14 +49,25 @@ inline PageTurnResult detectPageTurn(const MappedInputManager& input) {
   return {prev, next};
 }
 
-inline void displayWithRefreshCycle(const GfxRenderer& renderer, int& pagesUntilFullRefresh) {
+inline bool consumeFullRefreshCycle(int& pagesUntilFullRefresh) {
   if (pagesUntilFullRefresh <= 1) {
-    renderer.displayBuffer(HalDisplay::HALF_REFRESH);
     pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
-  } else {
-    renderer.displayBuffer();
-    pagesUntilFullRefresh--;
+    return true;
   }
+  pagesUntilFullRefresh--;
+  return false;
+}
+
+inline HalDisplay::RefreshMode nextRefreshMode(int& pagesUntilFullRefresh) {
+  return consumeFullRefreshCycle(pagesUntilFullRefresh) ? HalDisplay::HALF_REFRESH : HalDisplay::FAST_REFRESH;
+}
+
+inline HalDisplay::RefreshMode nextNativeGrayscaleRefreshMode(int& pagesUntilFullRefresh) {
+  return consumeFullRefreshCycle(pagesUntilFullRefresh) ? HalDisplay::FULL_REFRESH : HalDisplay::FAST_REFRESH;
+}
+
+inline void displayWithRefreshCycle(const GfxRenderer& renderer, int& pagesUntilFullRefresh) {
+  renderer.displayBuffer(nextRefreshMode(pagesUntilFullRefresh));
 }
 
 // Grayscale anti-aliasing pass. Renders content twice (LSB + MSB) to build
@@ -64,14 +75,19 @@ inline void displayWithRefreshCycle(const GfxRenderer& renderer, int& pagesUntil
 // and other overlays should be drawn before calling this.
 // Kept as a template to avoid std::function overhead; instantiated once per reader type.
 template <typename RenderFn>
-void renderAntiAliased(GfxRenderer& renderer, RenderFn&& renderFn) {
+bool renderAntiAliased(GfxRenderer& renderer, RenderFn&& renderFn,
+                       const HalDisplay::RefreshMode refreshMode = HalDisplay::FAST_REFRESH) {
   if (!renderer.supportsGrayscale()) {
-    return;
+    return false;
   }
 
   if (!renderer.storeBwBuffer()) {
     LOG_ERR("READER", "Failed to store BW buffer for anti-aliasing");
-    return;
+    return false;
+  }
+
+  if (renderer.usesNativeGrayscaleFramebuffer()) {
+    renderer.copyGrayscaleBwBuffer();
   }
 
   renderer.clearScreen(0x00);
@@ -84,10 +100,11 @@ void renderAntiAliased(GfxRenderer& renderer, RenderFn&& renderFn) {
   renderFn();
   renderer.copyGrayscaleMsbBuffers();
 
-  renderer.displayGrayBuffer();
+  renderer.displayGrayBuffer(refreshMode);
   renderer.setRenderMode(GfxRenderer::BW);
 
   renderer.restoreBwBuffer();
+  return true;
 }
 
 }  // namespace ReaderUtils

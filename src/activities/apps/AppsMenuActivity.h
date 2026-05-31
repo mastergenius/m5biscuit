@@ -17,13 +17,7 @@ class AppsMenuActivity final : public Activity {
 
  private:
   int selectorIndex = 0;
-  static constexpr int ITEM_COUNT = 8;
-  static constexpr int COLS = 2;
-  static constexpr int ROWS = 4;
-
-  // Grid navigation
-  int getRow() const { return selectorIndex / COLS; }
-  int getCol() const { return selectorIndex % COLS; }
+  static constexpr int ITEM_COUNT = 5;
 
   // Cached system info (refreshed on enter + periodically)
   uint32_t freeHeap = 0;

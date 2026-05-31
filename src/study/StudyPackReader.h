@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -15,6 +16,17 @@ struct StudyPackInfo {
   int episodeCount = 0;
 };
 
+struct StudyAction {
+  std::string id;
+  std::string label;
+  std::string meaning;
+};
+
+struct StudyChoice {
+  std::string id;
+  std::string label;
+};
+
 struct StudyEpisode {
   std::string id;
   std::string type;
@@ -23,8 +35,11 @@ struct StudyEpisode {
   std::string prompt;
   std::string reveal;
   std::string rubricId;
+  std::string responseMode;
   std::vector<std::string> conceptIds;
-  std::vector<std::string> actions;
+  std::vector<std::string> actionIds;
+  std::vector<StudyAction> actions;
+  std::vector<StudyChoice> choices;
   std::vector<std::string> nextIds;
 };
 
@@ -37,7 +52,7 @@ class StudyPackReader {
   bool loadEpisodeById(const StudyPackInfo& pack, const std::string& episodeId, StudyEpisode& out) const;
   bool loadEpisodeByIndex(const StudyPackInfo& pack, int index, StudyEpisode& out) const;
   bool loadRubricActions(const StudyPackInfo& pack, const std::string& rubricId,
-                         std::vector<std::string>& actions) const;
+                         const std::vector<std::string>& actionIds, std::vector<StudyAction>& actions) const;
 
  private:
   bool readEpisodeLine(const StudyPackInfo& pack, bool byId, const std::string& episodeId, int episodeIndex,

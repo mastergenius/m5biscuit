@@ -97,9 +97,11 @@ void RadarHomeRenderer::drawTextCenteredInRect(GfxRenderer& r, int rx, int ry, i
 // Main draw entry point
 // ---------------------------------------------------------------------------
 
-void RadarHomeRenderer::draw(GfxRenderer& renderer, const RadarNode* nodes, int selectedIndex,
+void RadarHomeRenderer::draw(GfxRenderer& renderer, const RadarNode* nodes, int nodeCount, int selectedIndex,
                              const RadarHomeStatus& status) {
   const int pageWidth = renderer.getScreenWidth();   // 480
+  if (nodeCount <= 0) return;
+  if (nodeCount > MAX_NODE_COUNT) nodeCount = MAX_NODE_COUNT;
 
   // -----------------------------------------------------------------------
   // A. Top bar: "BISCUIT." brand left, battery right, then separator line
@@ -143,9 +145,10 @@ void RadarHomeRenderer::draw(GfxRenderer& renderer, const RadarNode* nodes, int 
   // -----------------------------------------------------------------------
   // D. Nodes + connectors
   // -----------------------------------------------------------------------
-  for (int i = 0; i < NODE_COUNT; i++) {
-    int nodeCX = CENTER_X + NODE_DX[i] * NODE_RING_RADIUS / 1000;
-    int nodeCY = CENTER_Y + NODE_DY[i] * NODE_RING_RADIUS / 1000;
+  for (int i = 0; i < nodeCount; i++) {
+    const int posIndex = (i * MAX_NODE_COUNT) / nodeCount;
+    int nodeCX = CENTER_X + NODE_DX[posIndex] * NODE_RING_RADIUS / 1000;
+    int nodeCY = CENTER_Y + NODE_DY[posIndex] * NODE_RING_RADIUS / 1000;
 
     int nodeX = nodeCX - NODE_W / 2;
     int nodeY = nodeCY - NODE_H / 2;

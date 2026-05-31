@@ -49,6 +49,7 @@ void TxtReaderActivity::onExit() {
 
   // Reset orientation back to portrait for the rest of the UI
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
+  renderer.requestFullRefreshNextDisplay();
 
   pageOffsets.clear();
   currentPageLines.clear();
@@ -375,11 +376,20 @@ void TxtReaderActivity::renderPage() {
   renderLines();
   renderStatusBar();
 
+  const bool canRenderGrayscale = SETTINGS.textAntiAliasing && renderer.supportsGrayscale();
+  if (canRenderGrayscale && renderer.usesNativeGrayscaleFramebuffer()) {
+    const auto refreshMode = ReaderUtils::nextNativeGrayscaleRefreshMode(pagesUntilFullRefresh);
+    if (ReaderUtils::renderAntiAliased(renderer, [&renderLines]() { renderLines(); }, refreshMode)) {
+      return;
+    }
+  }
+
   ReaderUtils::displayWithRefreshCycle(renderer, pagesUntilFullRefresh);
 
-  if (SETTINGS.textAntiAliasing) {
+  if (canRenderGrayscale) {
     ReaderUtils::renderAntiAliased(renderer, [&renderLines]() { renderLines(); });
   }
+
   // scope destructor clears font cache via FontCacheManager
 }
 

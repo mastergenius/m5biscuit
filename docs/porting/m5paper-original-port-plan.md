@@ -57,19 +57,24 @@ Captured during the first hardware bring-up on 2026-05-17:
   `-mfix-esp32-psram-cache-issue`.
 - The shared `partitions.csv` gives each OTA application slot `0x640000` bytes, so the effective
   maximum firmware image is 6,553,600 bytes per slot, not the full 16MB flash.
-- Current `m5paper` build after the grayscale fallback, WiFi setup page, M5Paper web-transfer launch
-  path, and EPUB cache hardening is `3,516,911 / 6,553,600` bytes of flash, roughly 53.7% of one
-  OTA slot.
-- Current `default` build is `6,520,585 / 6,553,600` bytes of flash, roughly 99.5% of one OTA
+- Current `m5paper` build after native grayscale enablement, WiFi setup page, M5Paper web-transfer
+  launch path, StudyPack runtime work, Study sync readback endpoints, and EPUB cache hardening is
+  `3,564,483 / 6,553,600` bytes of flash, roughly 54.4% of one OTA slot.
+- Current `default` build is `6,549,695 / 6,553,600` bytes of flash, roughly 99.9% of one OTA
   slot. The default target is therefore ROM-constrained; M5Paper is not currently ROM-constrained.
-- The current `m5paper` detailed link map reports internal DRAM at `79,472 / 124,580` bytes and
+- The current `m5paper` detailed link map reports internal DRAM at `79,480 / 124,580` bytes and
   IRAM at `102,007 / 131,072` bytes. The coarse PlatformIO RAM line includes PSRAM and is less
   useful for the real pressure points.
 - M5Paper's practical constraints are internal DRAM/IRAM pressure, render latency, watchdog safety,
   and shared SPI arbitration between e-paper and SD rather than application-slot flash size.
-- The display is stable as black-and-white. 16-level grayscale remains a later phase because the
-  current M5Paper flush path deliberately disables Biscuit's grayscale overlay path to avoid black
-  screen corruption.
+- The display is stable as black-and-white, and the M5Paper HAL now advertises grayscale support by
+  combining Biscuit's BW/LSB/MSB grayscale planes into a full 16-bit gray framebuffer and pushing it
+  through M5GFX/IT8951. The first hardware smoke showed no black-screen failure, but GL16/text mode
+  accumulated visible ghosts over multiple page turns when applied as a second physical pass. The
+  current implementation skips the initial physical BW refresh on M5Paper readers, pushes one full
+  grayscale framebuffer with GL16/text for normal page turns, and uses GC16/quality on the reader
+  refresh cadence for resync. Hardware smoke now shows clean page turns; some ghosting can remain
+  when leaving reader pages into menus, so reader submenu/full-refresh policy remains a tuning item.
 - Touch works through virtual zones on the portrait `540x960` logical surface. The bottom strip maps
   to Back/Confirm/Left/Right, and the right strip maps to Up/Down. The raw GT911 coordinates observed
   on hardware are rotated into this logical surface before they enter `MappedInputManager`.
@@ -88,6 +93,11 @@ Captured during the first hardware bring-up on 2026-05-17:
 ## Stabilization Plan After First Usable Hardware Pass
 
 Status on 2026-05-17: the original M5Paper build is usable enough for real device walking tests.
+Status on 2026-05-18: StudyPack runtime/sync tooling exists and native grayscale builds. The first
+grayscale hardware smoke did not black-screen, but showed accumulated ghosts with GL16/text updates;
+M5Paper reader paths now use a single native grayscale framebuffer update with GC16/quality resync on
+the reader refresh cadence. The current smoke result is readable page turns, with menu-transition
+ghosting still acceptable but not fully solved.
 Boot, monochrome display refresh, virtual touch zones, SD card browsing, WiFi transfer, sleep/wake
 from the power button, TXT reading, and large EPUB reading have all been exercised on hardware.
 
@@ -109,6 +119,7 @@ Stabilization checklist:
    - SD root and `/biscuit` browse
    - TXT open and page turn
    - large EPUB open, page forward/back, exit, reopen
+   - EPUB page with text anti-aliasing/grayscale enabled and disabled
    - WiFi transfer join/AP path
    - sleep, wake, and return to startup menu
    - one simple game or utility
@@ -133,6 +144,13 @@ Immediate technical debt:
 - `env:native` currently tries to compile app code that depends on Arduino, FreeRTOS, BLE, and HAL
   headers. It should either become a narrow pure-logic test target or be replaced by a dedicated
   `native-core` target. It is useful, but not mandatory for the first M5Paper experimental firmware.
+- Web upload and WebDAV watchdog resets are now guarded with `esp_task_wdt_status(nullptr)`, so
+  non-subscribed web-server tasks should no longer spam `esp_task_wdt_reset(707): task not found`.
+  A future cleanup should move this into a shared HAL/helper instead of duplicating it in network
+  handlers.
+- WebDAV `MKCOL`, `PUT`, and `GET` work for StudyPack transfer paths. `GET` now streams file content
+  in bounded chunks instead of only advertising the file length. Continue to test larger DAV
+  downloads because this path is less important than the browser/API upload path.
 - The M5Paper HAL is still implemented with board conditionals inside shared files. This is
   acceptable for stabilization, but the long-term shape should split display, storage, GPIO, and
   power backends by board.
@@ -164,8 +182,8 @@ Non-negotiable constraints:
   `MappedInputManager` wherever possible.
 - Do not introduce a touch-only UX path; M5Paper touch may augment navigation, but every required
   workflow must remain reachable through logical buttons or a documented fallback.
-- First milestone is black-and-white. Native 16-level grayscale can be a later phase after the
-  driver and geometry are stable.
+- First milestone was black-and-white. Native grayscale is now enabled experimentally and must remain
+  easy to gate off if hardware smoke tests show black-screen, ghosting, or latency regressions.
 
 ## Blockers And Gates
 
@@ -288,7 +306,8 @@ intact and proves display output quickly.
   portrait panels do not use X4's `480x800 -> 800x480` transform.
 - Implement a M5Paper display flush path:
   - 1bpp buffer to monochrome e-paper output for milestone 1.
-  - Later optional conversion to M5Paper 4bpp grayscale.
+  - Experimental grayscale path combines BW/LSB/MSB planes into a 16-bit gray framebuffer and lets
+    M5GFX/IT8951 perform GL16 text updates with periodic GC16 quality resync.
 - Verify with a border/corner/axis test pattern before testing full UI.
 
 ### Phase 5: Input Policy

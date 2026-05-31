@@ -146,7 +146,8 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
           if (renderMode == GfxRenderer::BW && bmpVal < 3) {
             // Black (also paints over the grays in BW mode)
             renderer.drawPixel(screenX, screenY, pixelState);
-          } else if (renderMode == GfxRenderer::GRAYSCALE_MSB && (bmpVal == 1 || (gpio.deviceIsX4() && bmpVal == 2))) {
+          } else if (renderMode == GfxRenderer::GRAYSCALE_MSB &&
+                     (bmpVal == 1 || ((gpio.deviceIsX4() || gpio.deviceIsM5Paper()) && bmpVal == 2))) {
             // Light gray (also mark the MSB if it's going to be a dark gray too)
             // X3 AA tuning: keep only the darker antialias level to avoid washed text
             // We have to flag pixels in reverse for the gray buffers, as 0 leave alone, 1 update
@@ -194,7 +195,9 @@ void GfxRenderer::drawPixel(const int x, const int y, const bool state) const {
 
   // Bounds checking against runtime panel dimensions
   if (phyX < 0 || phyX >= panelWidth || phyY < 0 || phyY >= panelHeight) {
-    LOG_ERR("GFX", "!! Outside range (%d, %d) -> (%d, %d)", x, y, phyX, phyY);
+    // Drawing outside the viewport is expected during clipping of glyphs,
+    // images, and layout overflow. This function is per-pixel hot path, so
+    // do not log here.
     return;
   }
 
@@ -698,7 +701,8 @@ void GfxRenderer::drawBitmap(const Bitmap& bitmap, const int x, const int y, con
 
       if (renderMode == BW && val < 3) {
         drawPixel(screenX, screenY);
-      } else if (renderMode == GRAYSCALE_MSB && (val == 1 || (gpio.deviceIsX4() && val == 2))) {
+      } else if (renderMode == GRAYSCALE_MSB &&
+                 (val == 1 || ((gpio.deviceIsX4() || gpio.deviceIsM5Paper()) && val == 2))) {
         drawPixel(screenX, screenY, false);
       } else if (renderMode == GRAYSCALE_LSB && val == 1) {
         drawPixel(screenX, screenY, false);
@@ -864,10 +868,15 @@ void GfxRenderer::invertScreen() const {
 void GfxRenderer::displayBuffer(const HalDisplay::RefreshMode refreshMode) const {
   auto elapsed = millis() - start_ms;
   LOG_DBG("GFX", "Time = %lu ms from clearScreen to displayBuffer", elapsed);
+  HalDisplay::RefreshMode effectiveRefreshMode = refreshMode;
+  if (forceFullRefreshNext) {
+    effectiveRefreshMode = HalDisplay::FULL_REFRESH;
+    forceFullRefreshNext = false;
+  }
   if (inverted) {
     invertScreen();
   }
-  display.displayBuffer(refreshMode, fadingFix);
+  display.displayBuffer(effectiveRefreshMode, fadingFix);
   if (inverted) {
     // Restore so the next frame's drawing starts from a clean (non-inverted) state
     invertScreen();
@@ -1141,17 +1150,21 @@ size_t GfxRenderer::getBufferSize() const { return frameBufferSize; }
 // unused
 // void GfxRenderer::grayscaleRevert() const { display.grayscaleRevert(); }
 
+void GfxRenderer::copyGrayscaleBwBuffer() const { display.copyGrayscaleBwBuffer(frameBuffer); }
+
 void GfxRenderer::copyGrayscaleLsbBuffers() const { display.copyGrayscaleLsbBuffers(frameBuffer); }
 
 void GfxRenderer::copyGrayscaleMsbBuffers() const { display.copyGrayscaleMsbBuffers(frameBuffer); }
 
 bool GfxRenderer::supportsGrayscale() const { return display.supportsGrayscale(); }
 
-void GfxRenderer::displayGrayBuffer() const {
+bool GfxRenderer::usesNativeGrayscaleFramebuffer() const { return display.usesNativeGrayscaleFramebuffer(); }
+
+void GfxRenderer::displayGrayBuffer(const HalDisplay::RefreshMode refreshMode) const {
   if (inverted) {
     invertScreen();
   }
-  display.displayGrayBuffer(fadingFix);
+  display.displayGrayBuffer(refreshMode, fadingFix);
   if (inverted) {
     invertScreen();
   }

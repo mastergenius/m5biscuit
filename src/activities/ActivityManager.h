@@ -87,6 +87,10 @@ class ActivityManager {
   void goToFileBrowser(std::string path = {});
   void goToRecentBooks();
   void goToBrowser();
+  void goToStudy();
+#if BISCUIT_BOARD_M5PAPER
+  void goToDeviceSync();
+#endif
   void goToReader(std::string path);
   void goToSleep();
   void goToBoot();

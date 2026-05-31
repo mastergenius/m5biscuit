@@ -27,6 +27,10 @@ class HomeActivity final : public Activity {
   void onFileTransferOpen();
   void onOpdsBrowserOpen();
   void onAppsOpen();
+  void onStudyOpen();
+#if BISCUIT_BOARD_M5PAPER
+  void onDeviceSyncOpen();
+#endif
 
   int getMenuItemCount() const;
   bool storeCoverBuffer();    // Store frame buffer for cover image

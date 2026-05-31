@@ -40,6 +40,7 @@ int XtcReaderChapterSelectionActivity::findChapterIndexForPage(uint32_t page) co
 
 void XtcReaderChapterSelectionActivity::onEnter() {
   Activity::onEnter();
+  renderer.requestFullRefreshNextDisplay();
 
   if (!xtc) {
     return;

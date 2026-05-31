@@ -95,6 +95,7 @@ void EpubReaderActivity::onExit() {
 
   // Reset orientation back to portrait for the rest of the UI
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
+  renderer.requestFullRefreshNextDisplay();
 
   APP_STATE.readerActivityLoadCount = 0;
   APP_STATE.saveToFile();
@@ -714,13 +715,58 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
 
   const bool canRenderGrayscale = SETTINGS.textAntiAliasing && renderer.supportsGrayscale();
 
-  // Force special handling for pages with images when anti-aliasing is on
-  bool imagePageWithAA = page->hasImages() && canRenderGrayscale;
-
   page->render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, orientedMarginTop);
   renderStatusBar();
   fcm->logStats("bw_render");
   const auto tBwRender = millis();
+
+  const bool nativeGrayscale = canRenderGrayscale && renderer.usesNativeGrayscaleFramebuffer();
+  if (nativeGrayscale) {
+    if (!renderer.storeBwBuffer()) {
+      LOG_ERR("ERS", "Failed to store BW buffer for native grayscale; falling back to BW display");
+      ReaderUtils::displayWithRefreshCycle(renderer, pagesUntilFullRefresh);
+      const auto tEnd = millis();
+      LOG_DBG("ERS",
+              "Page render: prewarm=%lums bw_render=%lums display=%lums total=%lums",
+              tPrewarm - t0, tBwRender - tPrewarm, tEnd - tBwRender, tEnd - t0);
+      return;
+    }
+
+    const auto tBwStore = millis();
+    renderer.copyGrayscaleBwBuffer();
+
+    renderer.clearScreen(0x00);
+    renderer.setRenderMode(GfxRenderer::GRAYSCALE_LSB);
+    page->render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, orientedMarginTop);
+    renderer.copyGrayscaleLsbBuffers();
+    const auto tGrayLsb = millis();
+
+    renderer.clearScreen(0x00);
+    renderer.setRenderMode(GfxRenderer::GRAYSCALE_MSB);
+    page->render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, orientedMarginTop);
+    renderer.copyGrayscaleMsbBuffers();
+    const auto tGrayMsb = millis();
+
+    const auto refreshMode = ReaderUtils::nextNativeGrayscaleRefreshMode(pagesUntilFullRefresh);
+    renderer.displayGrayBuffer(refreshMode);
+    const auto tGrayDisplay = millis();
+    renderer.setRenderMode(GfxRenderer::BW);
+    fcm->logStats("gray");
+
+    renderer.restoreBwBuffer();
+    const auto tBwRestore = millis();
+
+    const auto tEnd = millis();
+    LOG_DBG("ERS",
+            "Page render: prewarm=%lums bw_render=%lums bw_store=%lums "
+            "gray_lsb=%lums gray_msb=%lums gray_display=%lums bw_restore=%lums total=%lums",
+            tPrewarm - t0, tBwRender - tPrewarm, tBwStore - tBwRender, tGrayLsb - tBwStore,
+            tGrayMsb - tGrayLsb, tGrayDisplay - tGrayMsb, tBwRestore - tGrayDisplay, tEnd - t0);
+    return;
+  }
+
+  // Force special handling for pages with images when anti-aliasing is on
+  bool imagePageWithAA = page->hasImages() && canRenderGrayscale;
 
   if (imagePageWithAA) {
     // Double FAST_REFRESH with selective image blanking (pablohc's technique):

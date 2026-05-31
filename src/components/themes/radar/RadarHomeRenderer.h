@@ -21,12 +21,12 @@ class RadarHomeRenderer {
   static constexpr int RADIUS_MID = 130;
   static constexpr int RADIUS_INNER = 70;
   static constexpr int NODE_RING_RADIUS = 185;
-  static constexpr int NODE_COUNT = 8;
+  static constexpr int MAX_NODE_COUNT = 8;
   static constexpr int NODE_W = 80;
   static constexpr int NODE_H = 28;
   static constexpr int NODE_CORNER = 4;
 
-  static void draw(GfxRenderer& renderer, const RadarNode* nodes, int selectedIndex,
+  static void draw(GfxRenderer& renderer, const RadarNode* nodes, int nodeCount, int selectedIndex,
                    const RadarHomeStatus& status);
 
  private:

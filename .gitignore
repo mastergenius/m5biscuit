@@ -15,3 +15,16 @@ build
 .history/
 /.venv
 *.local*
+
+# ESP-IDF/PlatformIO generated files for probe builds.
+/managed_components/
+/dependencies.lock
+/sdkconfig.defaults
+/sdkconfig.*
+
+# Device Sync debug-only embedded fallback secrets. Temporary until QR pairing exists.
+src/activities/apps/DeviceSyncDebugTemporaryPairingFallback.local.h
+
+# Local Study Twin learner imports/state.
+agents/study-twin/imports/
+agents/study-twin/state/

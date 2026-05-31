@@ -22,6 +22,13 @@ void* allocateDisplayMemory(size_t bytes) {
   return ptr;
 }
 
+bool ensureBuffer(uint8_t*& buffer, size_t bytes) {
+  if (!buffer) {
+    buffer = static_cast<uint8_t*>(allocateDisplayMemory(bytes));
+  }
+  return buffer != nullptr;
+}
+
 uint8_t readBitmapByte(const uint8_t* data, size_t index, bool fromProgmem) {
   return fromProgmem ? pgm_read_byte(data + index) : data[index];
 }
@@ -31,6 +38,12 @@ bool bitmapPixelIsWhite(const uint8_t* imageData, uint16_t width, uint16_t x, ui
   const size_t byteIndex = static_cast<size_t>(y) * widthBytes + (x / 8);
   const uint8_t bitMask = 0x80 >> (x % 8);
   return (readBitmapByte(imageData, byteIndex, fromProgmem) & bitMask) != 0;
+}
+
+bool packedPixelIsWhite(const uint8_t* buffer, uint16_t x, uint16_t y) {
+  const size_t byteIndex = static_cast<size_t>(y) * HalDisplay::DISPLAY_WIDTH_BYTES + (x / 8);
+  const uint8_t bitMask = 0x80 >> (x % 8);
+  return (buffer[byteIndex] & bitMask) != 0;
 }
 
 void setPackedPixel(uint8_t* buffer, uint16_t x, uint16_t y, bool white) {
@@ -57,6 +70,10 @@ m5gfx::epd_mode_t convertRefreshMode(HalDisplay::RefreshMode mode) {
       return m5gfx::epd_fastest;
   }
 }
+
+m5gfx::epd_mode_t convertGrayscaleRefreshMode(HalDisplay::RefreshMode mode) {
+  return mode == HalDisplay::FULL_REFRESH ? m5gfx::epd_quality : m5gfx::epd_text;
+}
 }  // namespace
 
 HalDisplay::HalDisplay() = default;
@@ -64,6 +81,9 @@ HalDisplay::HalDisplay() = default;
 HalDisplay::~HalDisplay() {
   if (frameBuffer) {
     heap_caps_free(frameBuffer);
+  }
+  if (grayscaleBwBuffer) {
+    heap_caps_free(grayscaleBwBuffer);
   }
   if (grayscaleLsbBuffer) {
     heap_caps_free(grayscaleLsbBuffer);
@@ -79,6 +99,15 @@ HalDisplay::~HalDisplay() {
 void HalDisplay::begin() {
   if (!frameBuffer) {
     frameBuffer = static_cast<uint8_t*>(allocateDisplayMemory(BUFFER_SIZE));
+  }
+  if (!grayscaleBwBuffer) {
+    grayscaleBwBuffer = static_cast<uint8_t*>(allocateDisplayMemory(BUFFER_SIZE));
+  }
+  if (!grayscaleLsbBuffer) {
+    grayscaleLsbBuffer = static_cast<uint8_t*>(allocateDisplayMemory(BUFFER_SIZE));
+  }
+  if (!grayscaleMsbBuffer) {
+    grayscaleMsbBuffer = static_cast<uint8_t*>(allocateDisplayMemory(BUFFER_SIZE));
   }
   if (!nativeFrameBuffer) {
     nativeFrameBuffer = static_cast<uint16_t*>(allocateDisplayMemory(static_cast<size_t>(DISPLAY_WIDTH) *
@@ -136,6 +165,10 @@ void HalDisplay::displayBuffer(HalDisplay::RefreshMode mode, bool turnOffScreen)
   if (!frameBuffer || !nativeFrameBuffer) {
     return;
   }
+  // The second argument is the legacy Xteink "sunlight fading fix" flag as passed
+  // through GfxRenderer. On M5Paper, sleeping the IT8951 after every frame makes
+  // later UI renders appear to stop updating, so this flag is intentionally a no-op.
+  (void)turnOffScreen;
   const uint16_t black = M5.Display.color565(0, 0, 0);
   const uint16_t white = M5.Display.color565(255, 255, 255);
   for (uint16_t y = 0; y < DISPLAY_HEIGHT; ++y) {
@@ -145,13 +178,13 @@ void HalDisplay::displayBuffer(HalDisplay::RefreshMode mode, bool turnOffScreen)
       nativeFrameBuffer[static_cast<size_t>(y) * DISPLAY_WIDTH + x] = (frameBuffer[byteIndex] & bitMask) ? white : black;
     }
   }
+  if (grayscaleBwBuffer) {
+    memcpy(grayscaleBwBuffer, frameBuffer, BUFFER_SIZE);
+  }
   {
     HalSharedSpiLock lock;
     M5.Display.setEpdMode(convertRefreshMode(mode));
     M5.Display.pushImage(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, nativeFrameBuffer);
-    if (turnOffScreen) {
-      M5.Display.sleep();
-    }
   }
 }
 
@@ -169,27 +202,72 @@ void HalDisplay::copyGrayscaleBuffers(const uint8_t* lsbBuffer, const uint8_t* m
   copyGrayscaleMsbBuffers(msbBuffer);
 }
 
+void HalDisplay::copyGrayscaleBwBuffer(const uint8_t* bwBuffer) {
+  if (!bwBuffer || !ensureBuffer(grayscaleBwBuffer, BUFFER_SIZE)) {
+    return;
+  }
+  memcpy(grayscaleBwBuffer, bwBuffer, BUFFER_SIZE);
+}
+
 void HalDisplay::copyGrayscaleLsbBuffers(const uint8_t* lsbBuffer) {
-  (void)lsbBuffer;
+  if (!lsbBuffer || !ensureBuffer(grayscaleLsbBuffer, BUFFER_SIZE)) {
+    return;
+  }
+  memcpy(grayscaleLsbBuffer, lsbBuffer, BUFFER_SIZE);
 }
 
 void HalDisplay::copyGrayscaleMsbBuffers(const uint8_t* msbBuffer) {
-  (void)msbBuffer;
+  if (!msbBuffer || !ensureBuffer(grayscaleMsbBuffer, BUFFER_SIZE)) {
+    return;
+  }
+  memcpy(grayscaleMsbBuffer, msbBuffer, BUFFER_SIZE);
 }
 
 void HalDisplay::cleanupGrayscaleBuffers(const uint8_t* bwBuffer) {
   if (bwBuffer && frameBuffer && bwBuffer != frameBuffer) {
     memcpy(frameBuffer, bwBuffer, BUFFER_SIZE);
   }
+  if (bwBuffer && ensureBuffer(grayscaleBwBuffer, BUFFER_SIZE)) {
+    memcpy(grayscaleBwBuffer, bwBuffer, BUFFER_SIZE);
+  }
 }
 
-bool HalDisplay::supportsGrayscale() const { return false; }
+bool HalDisplay::supportsGrayscale() const {
+  return grayscaleBwBuffer && grayscaleLsbBuffer && grayscaleMsbBuffer && nativeFrameBuffer;
+}
 
-void HalDisplay::displayGrayBuffer(bool turnOffScreen) {
-  if (turnOffScreen) {
-    HalSharedSpiLock lock;
-    M5.Display.sleep();
+bool HalDisplay::usesNativeGrayscaleFramebuffer() const { return true; }
+
+void HalDisplay::displayGrayBuffer(HalDisplay::RefreshMode mode, bool turnOffScreen) {
+  if (!supportsGrayscale()) {
+    return;
   }
+  // See displayBuffer(): this is the legacy fading-fix flag, not a sleep request.
+  (void)turnOffScreen;
+
+  const uint16_t black = M5.Display.color565(0, 0, 0);
+  const uint16_t dark = M5.Display.color565(85, 85, 85);
+  const uint16_t light = M5.Display.color565(170, 170, 170);
+  const uint16_t white = M5.Display.color565(255, 255, 255);
+
+  for (uint16_t y = 0; y < DISPLAY_HEIGHT; ++y) {
+    for (uint16_t x = 0; x < DISPLAY_WIDTH; ++x) {
+      const bool bwWhite = packedPixelIsWhite(grayscaleBwBuffer, x, y);
+      const bool lsbMark = packedPixelIsWhite(grayscaleLsbBuffer, x, y);
+      const bool msbMark = packedPixelIsWhite(grayscaleMsbBuffer, x, y);
+      uint16_t color = bwWhite ? white : black;
+      if (!bwWhite && msbMark) {
+        color = lsbMark ? dark : light;
+      } else if (!bwWhite && lsbMark) {
+        color = dark;
+      }
+      nativeFrameBuffer[static_cast<size_t>(y) * DISPLAY_WIDTH + x] = color;
+    }
+  }
+
+  HalSharedSpiLock lock;
+  M5.Display.setEpdMode(convertGrayscaleRefreshMode(mode));
+  M5.Display.pushImage(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, nativeFrameBuffer);
 }
 
 uint16_t HalDisplay::getDisplayWidth() const { return DISPLAY_WIDTH; }
@@ -252,6 +330,10 @@ void HalDisplay::copyGrayscaleBuffers(const uint8_t* lsbBuffer, const uint8_t* m
   einkDisplay.copyGrayscaleBuffers(lsbBuffer, msbBuffer);
 }
 
+void HalDisplay::copyGrayscaleBwBuffer(const uint8_t* bwBuffer) {
+  (void)bwBuffer;
+}
+
 void HalDisplay::copyGrayscaleLsbBuffers(const uint8_t* lsbBuffer) { einkDisplay.copyGrayscaleLsbBuffers(lsbBuffer); }
 
 void HalDisplay::copyGrayscaleMsbBuffers(const uint8_t* msbBuffer) { einkDisplay.copyGrayscaleMsbBuffers(msbBuffer); }
@@ -260,7 +342,12 @@ void HalDisplay::cleanupGrayscaleBuffers(const uint8_t* bwBuffer) { einkDisplay.
 
 bool HalDisplay::supportsGrayscale() const { return true; }
 
-void HalDisplay::displayGrayBuffer(bool turnOffScreen) { einkDisplay.displayGrayBuffer(turnOffScreen); }
+bool HalDisplay::usesNativeGrayscaleFramebuffer() const { return false; }
+
+void HalDisplay::displayGrayBuffer(HalDisplay::RefreshMode mode, bool turnOffScreen) {
+  (void)mode;
+  einkDisplay.displayGrayBuffer(turnOffScreen);
+}
 
 uint16_t HalDisplay::getDisplayWidth() const { return EInkDisplay::DISPLAY_WIDTH; }
 

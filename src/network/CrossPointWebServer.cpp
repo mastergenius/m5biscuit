@@ -11,9 +11,14 @@
 #include <esp_task_wdt.h>
 
 #include <algorithm>
+#include <cstdlib>
+#include <cstring>
+#include <sys/time.h>
 
 #include "CrossPointSettings.h"
 #include "SettingsList.h"
+#include "study/StudyPackReader.h"
+#include "study/StudyReviewLog.h"
 #include "WifiCredentialStore.h"
 #include "WebDAVHandler.h"
 #include "WebSessionAuth.h"
@@ -106,6 +111,102 @@ String deviceId() {
 }
 
 String currentIpAddress(const bool apMode) { return apMode ? WiFi.softAPIP().toString() : WiFi.localIP().toString(); }
+
+void resetTaskWatchdogIfSubscribed() {
+  if (esp_task_wdt_status(nullptr) == ESP_OK) {
+    esp_task_wdt_reset();
+  }
+}
+
+std::string fileNameFromPath(const char* name) {
+  const std::string path = name ? name : "";
+  const size_t slash = path.rfind('/');
+  return slash == std::string::npos ? path : path.substr(slash + 1);
+}
+
+bool isReviewLogName(const String& name) {
+  return name.startsWith("reviews_") && name.endsWith(".jsonl") && name.indexOf('/') < 0 && name.indexOf('\\') < 0;
+}
+
+uint32_t readUintField(const char* json, const char* key, const uint32_t fallback) {
+  const char* pos = strstr(json, key);
+  if (!pos) {
+    return fallback;
+  }
+  pos += strlen(key);
+  while (*pos == ' ' || *pos == ':') {
+    pos++;
+  }
+  char* end = nullptr;
+  const unsigned long parsed = strtoul(pos, &end, 10);
+  return end == pos ? fallback : static_cast<uint32_t>(parsed);
+}
+
+struct StudySyncState {
+  uint32_t lastSeq = 0;
+  uint32_t openSegment = 1;
+  uint32_t openEventCount = 0;
+  uint32_t ackedSeq = 0;
+};
+
+StudySyncState readStudySyncState() {
+  StudySyncState state;
+  char buf[256];
+  const size_t read = Storage.readFileToBuffer(StudyReviewLog::STATE_PATH, buf, sizeof(buf), sizeof(buf) - 1);
+  if (read == 0) {
+    return state;
+  }
+  state.lastSeq = readUintField(buf, "\"last_seq\"", 0);
+  state.openSegment = readUintField(buf, "\"open_segment\"", 1);
+  state.openEventCount = readUintField(buf, "\"open_event_count\"", 0);
+  state.ackedSeq = readUintField(buf, "\"acked_seq\"", 0);
+  if (state.openSegment == 0) {
+    state.openSegment = 1;
+  }
+  return state;
+}
+
+bool writeStudySyncState(const StudySyncState& state) {
+  if (!Storage.ensureDirectoryExists("/biscuit/study/logs")) {
+    return false;
+  }
+  char buf[192];
+  snprintf(buf, sizeof(buf),
+           "{\"schema\":1,\"last_seq\":%lu,\"open_segment\":%lu,\"open_event_count\":%lu,\"acked_seq\":%lu}\n",
+           static_cast<unsigned long>(state.lastSeq), static_cast<unsigned long>(state.openSegment),
+           static_cast<unsigned long>(state.openEventCount), static_cast<unsigned long>(state.ackedSeq));
+  return Storage.writeFileAtomic(StudyReviewLog::STATE_PATH, String(buf));
+}
+
+bool streamFileToClient(WebServer& s, HalFile& file, const char* contentType, const String& filename) {
+  s.setContentLength(file.size());
+  if (!filename.isEmpty()) {
+    s.sendHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+  }
+  s.send(200, contentType, "");
+
+  NetworkClient client = s.client();
+  uint8_t buffer[4096];
+  bool ok = true;
+  while (ok && file.available()) {
+    const int result = file.read(buffer, sizeof(buffer));
+    if (result <= 0) {
+      break;
+    }
+    size_t written = 0;
+    while (written < static_cast<size_t>(result)) {
+      resetTaskWatchdogIfSubscribed();
+      const size_t chunk = client.write(buffer + written, static_cast<size_t>(result) - written);
+      if (chunk == 0) {
+        ok = false;
+        break;
+      }
+      written += chunk;
+    }
+  }
+  client.clear();
+  return ok;
+}
 
 void addCapabilities(JsonArray capabilities) {
   capabilities.add("reader");
@@ -228,6 +329,10 @@ void CrossPointWebServer::begin() {
   server->on("/api/device", HTTP_GET, [this] { handleDevice(); });
   server->on("/api/status", HTTP_GET, [this] { handleStatus(); });
   server->on("/api/events", HTTP_GET, [this] { handleEvents(); });
+  server->on("/api/study/packs", HTTP_GET, [this] { handleStudyPacks(); });
+  server->on("/api/study/logs", HTTP_GET, [this] { handleStudyLogs(); });
+  server->on("/api/study/logs/ack", HTTP_POST, [this] { handleStudyLogAck(); });
+  server->on("/api/study/time", HTTP_POST, [this] { handleStudyTime(); });
   server->on("/api/wifi", HTTP_GET, [this] { handleGetWifiCredentials(); });
   server->on("/api/wifi", HTTP_POST, [this] { handlePostWifiCredentials(); });
   server->on("/api/files", HTTP_GET, [this] { handleFileListData(); });
@@ -430,8 +535,14 @@ void CrossPointWebServer::handleJszip() const {
 }
 
 void CrossPointWebServer::handleNotFound() const {
+  const String uri = server->uri();
+  if (uri.startsWith("/api/study/logs/")) {
+    handleStudyLogDownload(uri.substring(String("/api/study/logs/").length()));
+    return;
+  }
+
   String message = "404 Not Found\n\n";
-  message += "URI: " + server->uri() + "\n";
+  message += "URI: " + uri + "\n";
   server->send(404, "text/plain", message);
 }
 
@@ -459,6 +570,8 @@ void CrossPointWebServer::handleDevice() const {
   endpoints["status"] = "/api/status";
   endpoints["events"] = "/api/events";
   endpoints["files"] = "/api/files";
+  endpoints["study_packs"] = "/api/study/packs";
+  endpoints["study_logs"] = "/api/study/logs";
   endpoints["wifi"] = "/api/wifi";
   endpoints["settings"] = "/api/settings";
 
@@ -541,6 +654,198 @@ void CrossPointWebServer::handleEvents() const {
   server->send(200, "application/json", json);
 }
 
+void CrossPointWebServer::handleStudyPacks() const {
+  if (!requireAuth()) return;
+
+  StudyPackReader reader;
+  std::vector<StudyPackInfo> packs;
+  if (!reader.scanPacks(packs, 64)) {
+    server->send(500, "application/json", "{\"error\":\"pack_scan_failed\"}");
+    return;
+  }
+
+  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server->send(200, "application/json", "");
+  server->sendContent("{\"v\":0,\"root\":\"");
+  server->sendContent(StudyPackReader::PACK_ROOT);
+  server->sendContent("\",\"packs\":[");
+
+  bool first = true;
+  char output[768];
+  JsonDocument doc;
+  for (const auto& pack : packs) {
+    doc.clear();
+    doc["id"] = pack.id;
+    doc["title"] = pack.title;
+    doc["revision"] = pack.revision;
+    doc["path"] = pack.path;
+    doc["entry_episode_id"] = pack.entryEpisodeId;
+    doc["episode_count"] = pack.episodeCount;
+
+    if (!first) {
+      server->sendContent(",");
+    }
+    first = false;
+    serializeJson(doc, output, sizeof(output));
+    server->sendContent(output);
+  }
+
+  server->sendContent("]}");
+  server->sendContent("");
+}
+
+void CrossPointWebServer::handleStudyLogs() const {
+  if (!requireAuth()) return;
+  if (server->hasArg("segment")) {
+    handleStudyLogDownload(server->arg("segment"));
+    return;
+  }
+
+  const StudySyncState state = readStudySyncState();
+  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server->send(200, "application/json", "");
+
+  char head[256];
+  snprintf(head, sizeof(head),
+           "{\"v\":0,\"root\":\"%s\",\"state\":{\"last_seq\":%lu,\"open_segment\":%lu,"
+           "\"open_event_count\":%lu,\"acked_seq\":%lu},\"segments\":[",
+           StudyReviewLog::LOG_DIR, static_cast<unsigned long>(state.lastSeq),
+           static_cast<unsigned long>(state.openSegment), static_cast<unsigned long>(state.openEventCount),
+           static_cast<unsigned long>(state.ackedSeq));
+  server->sendContent(head);
+
+  FsFile root = Storage.open(StudyReviewLog::LOG_DIR);
+  bool first = true;
+  if (root && root.isDirectory()) {
+    FsFile entry = root.openNextFile();
+    char nameBuf[128];
+    char activeName[32];
+    snprintf(activeName, sizeof(activeName), "reviews_%06lu.jsonl", static_cast<unsigned long>(state.openSegment));
+    char output[384];
+    JsonDocument doc;
+    while (entry) {
+      entry.getName(nameBuf, sizeof(nameBuf));
+      const std::string name = fileNameFromPath(nameBuf);
+      if (!entry.isDirectory() && isReviewLogName(name.c_str())) {
+        doc.clear();
+        doc["name"] = name;
+        doc["path"] = String("/api/study/logs/") + name.c_str();
+        doc["size"] = entry.size();
+        doc["active"] = name == activeName;
+        if (!first) {
+          server->sendContent(",");
+        }
+        first = false;
+        serializeJson(doc, output, sizeof(output));
+        server->sendContent(output);
+      }
+      entry.close();
+      yield();
+      resetTaskWatchdogIfSubscribed();
+      entry = root.openNextFile();
+    }
+    root.close();
+  }
+
+  server->sendContent("]}");
+  server->sendContent("");
+}
+
+void CrossPointWebServer::handleStudyLogDownload(const String& segment) const {
+  if (!requireAuth()) return;
+
+  if (!isReviewLogName(segment)) {
+    server->send(400, "text/plain", "Invalid review log segment");
+    return;
+  }
+
+  const String path = String(StudyReviewLog::LOG_DIR) + "/" + segment;
+  if (!Storage.exists(path.c_str())) {
+    server->send(404, "text/plain", "Review log segment not found");
+    return;
+  }
+
+  HalFile file = Storage.open(path.c_str());
+  if (!file) {
+    server->send(500, "text/plain", "Failed to open review log segment");
+    return;
+  }
+  if (file.isDirectory()) {
+    file.close();
+    server->send(400, "text/plain", "Path is a directory");
+    return;
+  }
+
+  streamFileToClient(*server, file, "application/x-ndjson", segment);
+  file.close();
+}
+
+void CrossPointWebServer::handleStudyLogAck() const {
+  if (!requireAuth()) return;
+
+  uint32_t ackedSeq = 0;
+  if (server->hasArg("acked_seq")) {
+    ackedSeq = static_cast<uint32_t>(strtoul(server->arg("acked_seq").c_str(), nullptr, 10));
+  } else if (server->hasArg("plain")) {
+    JsonDocument doc;
+    if (!deserializeJson(doc, server->arg("plain"))) {
+      ackedSeq = doc["acked_seq"] | doc["ackedSeq"] | 0;
+    }
+  }
+
+  StudySyncState state = readStudySyncState();
+  if (ackedSeq > state.lastSeq) {
+    ackedSeq = state.lastSeq;
+  }
+  if (ackedSeq > state.ackedSeq) {
+    state.ackedSeq = ackedSeq;
+  }
+  if (!writeStudySyncState(state)) {
+    server->send(500, "application/json", "{\"error\":\"ack_failed\"}");
+    return;
+  }
+
+  char buf[96];
+  snprintf(buf, sizeof(buf), "{\"v\":0,\"acked_seq\":%lu,\"last_seq\":%lu}\n",
+           static_cast<unsigned long>(state.ackedSeq), static_cast<unsigned long>(state.lastSeq));
+  server->send(200, "application/json", buf);
+}
+
+void CrossPointWebServer::handleStudyTime() const {
+  if (!requireAuth()) return;
+
+  uint64_t epochMs = 0;
+  if (server->hasArg("epoch_ms")) {
+    epochMs = strtoull(server->arg("epoch_ms").c_str(), nullptr, 10);
+  } else if (server->hasArg("epoch_seconds")) {
+    epochMs = strtoull(server->arg("epoch_seconds").c_str(), nullptr, 10) * 1000ULL;
+  } else if (server->hasArg("plain")) {
+    JsonDocument doc;
+    if (!deserializeJson(doc, server->arg("plain"))) {
+      epochMs = doc["epoch_ms"] | 0ULL;
+      if (epochMs == 0) {
+        const uint64_t seconds = doc["epoch_seconds"] | 0ULL;
+        epochMs = seconds * 1000ULL;
+      }
+    }
+  }
+
+  const uint64_t epochSeconds = epochMs / 1000ULL;
+  if (epochSeconds < 1600000000ULL) {
+    server->send(400, "application/json", "{\"error\":\"invalid_epoch\"}");
+    return;
+  }
+
+  timeval tv{};
+  tv.tv_sec = static_cast<time_t>(epochSeconds);
+  tv.tv_usec = static_cast<suseconds_t>((epochMs % 1000ULL) * 1000ULL);
+  if (settimeofday(&tv, nullptr) != 0) {
+    server->send(500, "application/json", "{\"error\":\"set_time_failed\"}");
+    return;
+  }
+  server->send(200, "application/json", "{\"v\":0,\"clock\":\"mac_sync\"}");
+}
+
 void CrossPointWebServer::scanFiles(const char* path, const std::function<void(FileInfo)>& callback) const {
   FsFile root = Storage.open(path);
   if (!root) {
@@ -593,7 +898,7 @@ void CrossPointWebServer::scanFiles(const char* path, const std::function<void(F
 
     file.close();
     yield();               // Yield to allow WiFi and other tasks to process during long scans
-    esp_task_wdt_reset();  // Reset watchdog to prevent timeout on large directories
+    resetTaskWatchdogIfSubscribed();  // Reset watchdog to prevent timeout on large directories
     file = root.openNextFile();
   }
   root.close();
@@ -714,31 +1019,7 @@ void CrossPointWebServer::handleDownload() const {
     filename = nameBuf;
   }
 
-  server->setContentLength(file.size());
-  server->sendHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
-  server->send(200, contentType.c_str(), "");
-
-  NetworkClient client = server->client();
-  const size_t chunkSize = 4096;
-  uint8_t buffer[chunkSize];
-
-  bool downloadOk = true;
-  while (downloadOk && file.available()) {
-    int result = file.read(buffer, chunkSize);
-    if (result <= 0) break;
-    size_t bytesRead = static_cast<size_t>(result);
-    size_t totalWritten = 0;
-    while (totalWritten < bytesRead) {
-      esp_task_wdt_reset();
-      size_t wrote = client.write(buffer + totalWritten, bytesRead - totalWritten);
-      if (wrote == 0) {
-        downloadOk = false;
-        break;
-      }
-      totalWritten += wrote;
-    }
-  }
-  client.clear();
+  streamFileToClient(*server, file, contentType.c_str(), filename);
   file.close();
 }
 
@@ -749,12 +1030,12 @@ static size_t writeCount = 0;
 
 static bool flushUploadBuffer(CrossPointWebServer::UploadState& state) {
   if (state.bufferPos > 0 && state.file) {
-    esp_task_wdt_reset();  // Reset watchdog before potentially slow SD write
+    resetTaskWatchdogIfSubscribed();  // Reset watchdog before potentially slow SD write
     const unsigned long writeStart = millis();
     const size_t written = state.file.write(state.buffer.data(), state.bufferPos);
     totalWriteTime += millis() - writeStart;
     writeCount++;
-    esp_task_wdt_reset();  // Reset watchdog after SD write
+    resetTaskWatchdogIfSubscribed();  // Reset watchdog after SD write
 
     if (written != state.bufferPos) {
       LOG_DBG("WEB", "[UPLOAD] Buffer flush failed: expected %d, wrote %d", state.bufferPos, written);
@@ -770,7 +1051,7 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
   static size_t lastLoggedSize = 0;
 
   // Reset watchdog at start of every upload callback - HTTP parsing can be slow
-  esp_task_wdt_reset();
+  resetTaskWatchdogIfSubscribed();
 
   // Safety check: ensure server is still valid
   if (!running || !server) {
@@ -789,7 +1070,7 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
     }
 
     // Reset watchdog - this is the critical 1% crash point
-    esp_task_wdt_reset();
+    resetTaskWatchdogIfSubscribed();
 
     state.fileName = upload.filename;
     state.size = 0;
@@ -827,21 +1108,21 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
     filePath += state.fileName;
 
     // Check if file already exists - SD operations can be slow
-    esp_task_wdt_reset();
+    resetTaskWatchdogIfSubscribed();
     if (Storage.exists(filePath.c_str())) {
       LOG_DBG("WEB", "[UPLOAD] Overwriting existing file: %s", filePath.c_str());
-      esp_task_wdt_reset();
+      resetTaskWatchdogIfSubscribed();
       Storage.remove(filePath.c_str());
     }
 
     // Open file for writing - this can be slow due to FAT cluster allocation
-    esp_task_wdt_reset();
+    resetTaskWatchdogIfSubscribed();
     if (!Storage.openFileForWrite("WEB", filePath, state.file)) {
       state.error = "Failed to create file on SD card";
       LOG_DBG("WEB", "[UPLOAD] FAILED to create file: %s", filePath.c_str());
       return;
     }
-    esp_task_wdt_reset();
+    resetTaskWatchdogIfSubscribed();
 
     LOG_DBG("WEB", "[UPLOAD] File created successfully: %s", filePath.c_str());
   } else if (upload.status == UPLOAD_FILE_WRITE) {
@@ -1627,20 +1908,20 @@ void CrossPointWebServer::onWebSocketEvent(uint8_t num, WStype_t type, uint8_t* 
                   filePath.c_str());
 
           // Check if file exists and remove it
-          esp_task_wdt_reset();
+          resetTaskWatchdogIfSubscribed();
           if (Storage.exists(filePath.c_str())) {
             Storage.remove(filePath.c_str());
           }
 
           // Open file for writing
-          esp_task_wdt_reset();
+          resetTaskWatchdogIfSubscribed();
           if (!Storage.openFileForWrite("WS", filePath, wsUploadFile)) {
             wsServer->sendTXT(num, "ERROR:Failed to create file");
             wsUploadInProgress = false;
             wsUploadClientNum = 255;
             return;
           }
-          esp_task_wdt_reset();
+          resetTaskWatchdogIfSubscribed();
 
           // Zero-byte upload: complete immediately without waiting for BIN frames
           if (wsUploadSize == 0) {
@@ -1678,9 +1959,9 @@ void CrossPointWebServer::onWebSocketEvent(uint8_t num, WStype_t type, uint8_t* 
         wsServer->sendTXT(num, "ERROR:Upload overflow");
         return;
       }
-      esp_task_wdt_reset();
+      resetTaskWatchdogIfSubscribed();
       size_t written = wsUploadFile.write(payload, length);
-      esp_task_wdt_reset();
+      resetTaskWatchdogIfSubscribed();
 
       if (written != length) {
         abortWsUpload("WS");

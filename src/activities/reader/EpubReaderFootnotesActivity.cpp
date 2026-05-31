@@ -11,6 +11,7 @@
 
 void EpubReaderFootnotesActivity::onEnter() {
   Activity::onEnter();
+  renderer.requestFullRefreshNextDisplay();
   selectedIndex = 0;
   requestUpdate();
 }

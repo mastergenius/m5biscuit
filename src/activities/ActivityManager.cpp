@@ -10,6 +10,10 @@
 #include "home/FileBrowserActivity.h"
 #include "home/HomeActivity.h"
 #include "apps/AppsMenuActivity.h"
+#include "apps/StudyActivity.h"
+#if BISCUIT_BOARD_M5PAPER
+#include "apps/DeviceSyncActivity.h"
+#endif
 #include "home/RecentBooksActivity.h"
 #include "network/CrossPointWebServerActivity.h"
 #include "reader/ReaderActivity.h"
@@ -192,6 +196,12 @@ void ActivityManager::goToBrowser() {
   replaceActivity(std::make_unique<OpdsBookBrowserActivity>(renderer, mappedInput));
 }
 
+void ActivityManager::goToStudy() { replaceActivity(std::make_unique<StudyActivity>(renderer, mappedInput)); }
+
+#if BISCUIT_BOARD_M5PAPER
+void ActivityManager::goToDeviceSync() { replaceActivity(std::make_unique<DeviceSyncActivity>(renderer, mappedInput)); }
+#endif
+
 void ActivityManager::goToReader(std::string path) {
   replaceActivity(std::make_unique<ReaderActivity>(renderer, mappedInput, std::move(path)));
 }
@@ -207,7 +217,7 @@ void ActivityManager::goToFullScreenMessage(std::string message, EpdFontFamily::
   replaceActivity(std::make_unique<FullScreenMessageActivity>(renderer, mappedInput, std::move(message), style));
 }
 
-void ActivityManager::goHome() { replaceActivity(std::make_unique<AppsMenuActivity>(renderer, mappedInput)); }
+void ActivityManager::goHome() { replaceActivity(std::make_unique<HomeActivity>(renderer, mappedInput)); }
 
 void ActivityManager::pushActivity(std::unique_ptr<Activity>&& activity) {
   if (pendingActivity) {
@@ -230,7 +240,17 @@ void ActivityManager::popActivity() {
 
 bool ActivityManager::preventAutoSleep() const { return currentActivity && currentActivity->preventAutoSleep(); }
 
-bool ActivityManager::isReaderActivity() const { return currentActivity && currentActivity->isReaderActivity(); }
+bool ActivityManager::isReaderActivity() const {
+  if (currentActivity && currentActivity->isReaderActivity()) {
+    return true;
+  }
+  for (const auto& activity : stackActivities) {
+    if (activity && activity->isReaderActivity()) {
+      return true;
+    }
+  }
+  return false;
+}
 
 bool ActivityManager::skipLoopDelay() const { return currentActivity && currentActivity->skipLoopDelay(); }
 

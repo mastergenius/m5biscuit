@@ -16,6 +16,7 @@
 #include "CrossPointState.h"
 #include "MappedInputManager.h"
 #include "RecentBooksStore.h"
+#include "ReaderUtils.h"
 #include "XtcReaderChapterSelectionActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -48,6 +49,8 @@ void XtcReaderActivity::onEnter() {
 
 void XtcReaderActivity::onExit() {
   Activity::onExit();
+
+  renderer.requestFullRefreshNextDisplay();
 
   APP_STATE.readerActivityLoadCount = 0;
   APP_STATE.saveToFile();
@@ -209,8 +212,9 @@ void XtcReaderActivity::renderPage() {
       return (bit1 << 1) | bit2;
     };
 
-    // Optimized grayscale rendering without storeBwBuffer (saves 48KB peak memory)
-    // Flow: BW display → LSB/MSB passes → grayscale display → re-render BW for next frame
+    // Optimized grayscale rendering without storeBwBuffer (saves 48KB peak memory).
+    // Native grayscale panels can skip the initial physical BW refresh and push
+    // one full grayscale framebuffer instead.
 
     // Count pixel distribution for debugging
     uint32_t pixelCounts[4] = {0, 0, 0, 0};
@@ -231,22 +235,22 @@ void XtcReaderActivity::renderPage() {
       }
     }
 
-    // Display BW with conditional refresh based on pagesUntilFullRefresh
-    if (pagesUntilFullRefresh <= 1) {
-      renderer.displayBuffer(HalDisplay::HALF_REFRESH);
-      pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
-	    } else {
-	      renderer.displayBuffer();
-	      pagesUntilFullRefresh--;
-	    }
+    if (!renderer.supportsGrayscale()) {
+      ReaderUtils::displayWithRefreshCycle(renderer, pagesUntilFullRefresh);
+      free(pageBuffer);
+      LOG_DBG("XTR", "Rendered page %lu/%lu (2-bit BW fallback)", currentPage + 1, xtc->getPageCount());
+      return;
+    }
 
-	    if (!renderer.supportsGrayscale()) {
-	      free(pageBuffer);
-	      LOG_DBG("XTR", "Rendered page %lu/%lu (2-bit BW fallback)", currentPage + 1, xtc->getPageCount());
-	      return;
-	    }
+    HalDisplay::RefreshMode grayscaleRefreshMode = HalDisplay::FAST_REFRESH;
+    if (renderer.usesNativeGrayscaleFramebuffer()) {
+      renderer.copyGrayscaleBwBuffer();
+      grayscaleRefreshMode = ReaderUtils::nextNativeGrayscaleRefreshMode(pagesUntilFullRefresh);
+    } else {
+      ReaderUtils::displayWithRefreshCycle(renderer, pagesUntilFullRefresh);
+    }
 
-	    // Pass 2: LSB buffer - mark DARK gray only (XTH value 1)
+    // Pass 2: LSB buffer - mark DARK gray only (XTH value 1)
     // In LUT: 0 bit = apply gray effect, 1 bit = untouched
     renderer.clearScreen(0x00);
     for (uint16_t y = 0; y < pageHeight; y++) {
@@ -271,8 +275,8 @@ void XtcReaderActivity::renderPage() {
     }
     renderer.copyGrayscaleMsbBuffers();
 
-    // Display grayscale overlay
-    renderer.displayGrayBuffer();
+    // Display grayscale overlay/framebuffer
+    renderer.displayGrayBuffer(grayscaleRefreshMode);
 
     // Pass 4: Re-render BW to framebuffer (restore for next frame, instead of restoreBwBuffer)
     renderer.clearScreen();

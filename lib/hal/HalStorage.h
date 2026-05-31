@@ -27,6 +27,9 @@ class HalStorage {
   // Write a string to `path` on the SD card. Overwrites existing file.
   // Returns true on success.
   bool writeFile(const char* path, const String& content);
+  // Write through a temporary sibling path, then rename it into place.
+  // This avoids leaving truncated JSON/config files after power loss or reset.
+  bool writeFileAtomic(const char* path, const String& content);
   // Ensure a directory exists, creating it if necessary. Returns true on success.
   bool ensureDirectoryExists(const char* path);
 

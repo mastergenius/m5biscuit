@@ -402,6 +402,31 @@ bool HalStorage::removeDir(const char* path) { HAL_STORAGE_WRAPPED_CALL(removeDi
 
 #endif
 
+bool HalStorage::writeFileAtomic(const char* path, const String& content) {
+  if (!path || path[0] == '\0') {
+    return false;
+  }
+
+  String tmpPath(path);
+  tmpPath += ".tmp";
+  if (exists(tmpPath.c_str())) {
+    remove(tmpPath.c_str());
+  }
+  if (!writeFile(tmpPath.c_str(), content)) {
+    remove(tmpPath.c_str());
+    return false;
+  }
+  if (exists(path) && !remove(path)) {
+    remove(tmpPath.c_str());
+    return false;
+  }
+  if (!rename(tmpPath.c_str(), path)) {
+    remove(tmpPath.c_str());
+    return false;
+  }
+  return true;
+}
+
 // HalFile implementation
 // Allow doing file operations while ensuring thread safety via HalStorage's mutex.
 // Please keep the list below in sync with the HalFile.h header

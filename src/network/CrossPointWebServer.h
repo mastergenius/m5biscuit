@@ -99,6 +99,11 @@ class CrossPointWebServer {
   void handleDevice() const;
   void handleStatus() const;
   void handleEvents() const;
+  void handleStudyPacks() const;
+  void handleStudyLogs() const;
+  void handleStudyLogDownload(const String& segment) const;
+  void handleStudyLogAck() const;
+  void handleStudyTime() const;
   void handleFileList() const;
   void handleFileListData() const;
   void handleDownload() const;

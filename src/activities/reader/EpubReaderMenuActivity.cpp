@@ -39,6 +39,7 @@ std::vector<EpubReaderMenuActivity::MenuItem> EpubReaderMenuActivity::buildMenuI
 
 void EpubReaderMenuActivity::onEnter() {
   Activity::onEnter();
+  renderer.requestFullRefreshNextDisplay();
   requestUpdate();
 }
 

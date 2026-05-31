@@ -15,6 +15,7 @@ constexpr int kLargeStep = 10;
 
 void EpubReaderPercentSelectionActivity::onEnter() {
   Activity::onEnter();
+  renderer.requestFullRefreshNextDisplay();
   // Set up rendering task and mark first frame dirty.
   requestUpdate();
 }

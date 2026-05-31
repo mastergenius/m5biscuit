@@ -36,6 +36,7 @@ class GfxRenderer {
   Orientation orientation;
   bool fadingFix;
   bool inverted = false;
+  mutable bool forceFullRefreshNext = false;
   uint8_t* frameBuffer = nullptr;
   uint16_t panelWidth = HalDisplay::DISPLAY_WIDTH;
   uint16_t panelHeight = HalDisplay::DISPLAY_HEIGHT;
@@ -89,6 +90,7 @@ class GfxRenderer {
   int getScreenWidth() const;
   int getScreenHeight() const;
   void displayBuffer(HalDisplay::RefreshMode refreshMode = HalDisplay::FAST_REFRESH) const;
+  void requestFullRefreshNextDisplay() const { forceFullRefreshNext = true; }
   // EXPERIMENTAL: Windowed update - display only a rectangular region
   // void displayWindow(int x, int y, int width, int height) const;
   void invertScreen() const;
@@ -149,10 +151,12 @@ class GfxRenderer {
   // Grayscale functions
   void setRenderMode(const RenderMode mode) { this->renderMode = mode; }
   RenderMode getRenderMode() const { return renderMode; }
+  void copyGrayscaleBwBuffer() const;
   void copyGrayscaleLsbBuffers() const;
   void copyGrayscaleMsbBuffers() const;
   bool supportsGrayscale() const;
-  void displayGrayBuffer() const;
+  bool usesNativeGrayscaleFramebuffer() const;
+  void displayGrayBuffer(HalDisplay::RefreshMode refreshMode = HalDisplay::FAST_REFRESH) const;
   bool storeBwBuffer();    // Returns true if buffer was stored successfully
   void restoreBwBuffer();  // Restore and free the stored buffer
   void cleanupGrayscaleWithFrameBuffer() const;

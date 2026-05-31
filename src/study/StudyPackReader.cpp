@@ -6,6 +6,8 @@
 
 #include <algorithm>
 #include <cstring>
+#include <memory>
+#include <new>
 
 namespace {
 constexpr const char* MODULE = "STPK";
@@ -75,6 +77,32 @@ void copyStringArray(std::vector<std::string>& dest, JsonVariantConst value) {
   }
 }
 
+void copyChoices(std::vector<StudyChoice>& dest, JsonVariantConst value) {
+  dest.clear();
+  JsonArrayConst arr = value.as<JsonArrayConst>();
+  for (JsonObjectConst item : arr) {
+    StudyChoice choice;
+    copyString(choice.id, item["id"]);
+    copyString(choice.label, item["label"]);
+    if (!choice.id.empty()) {
+      if (choice.label.empty()) {
+        choice.label = choice.id;
+      }
+      dest.push_back(choice);
+    }
+  }
+}
+
+bool containsActionId(const std::vector<std::string>& actionIds, const char* id) {
+  if (!id || !*id) {
+    return false;
+  }
+  if (actionIds.empty()) {
+    return true;
+  }
+  return std::find(actionIds.begin(), actionIds.end(), id) != actionIds.end();
+}
+
 void copyEpisode(JsonObjectConst obj, StudyEpisode& out) {
   out = StudyEpisode{};
   copyString(out.id, obj["id"]);
@@ -84,8 +112,10 @@ void copyEpisode(JsonObjectConst obj, StudyEpisode& out) {
   copyString(out.prompt, obj["prompt"]);
   copyString(out.reveal, obj["reveal"]);
   copyString(out.rubricId, obj["rubric_id"]);
+  copyString(out.responseMode, obj["response"]["mode"]);
   copyStringArray(out.conceptIds, obj["concept_ids"]);
-  copyStringArray(out.actions, obj["response"]["actions"]);
+  copyStringArray(out.actionIds, obj["response"]["actions"]);
+  copyChoices(out.choices, obj["response"]["choices"]);
   copyStringArray(out.nextIds, obj["next"]);
 }
 }  // namespace
@@ -110,9 +140,14 @@ bool StudyPackReader::scanPacks(std::vector<StudyPackInfo>& packs, const int max
       continue;
     }
 
-    char nameBuf[96];
-    entry.getName(nameBuf, sizeof(nameBuf));
+    char nameBuf[96] = {};
+    const size_t nameLen = entry.getName(nameBuf, sizeof(nameBuf));
     entry.close();
+
+    if (nameLen == 0 || nameLen >= sizeof(nameBuf) - 1) {
+      LOG_ERR(MODULE, "Skipping StudyPack entry with invalid name");
+      continue;
+    }
 
     const std::string name = fileNameFromEntry(nameBuf);
     if (name.empty() || name[0] == '.') {
@@ -139,16 +174,20 @@ bool StudyPackReader::scanPacks(std::vector<StudyPackInfo>& packs, const int max
 }
 
 bool StudyPackReader::loadManifest(const std::string& packPath, StudyPackInfo& info) const {
-  char buf[MANIFEST_BUF_SIZE];
   const std::string path = joinPath(packPath, "manifest.json");
-  const size_t read = Storage.readFileToBuffer(path.c_str(), buf, sizeof(buf), sizeof(buf) - 1);
+  std::unique_ptr<char[]> buf(new (std::nothrow) char[MANIFEST_BUF_SIZE]);
+  if (!buf) {
+    LOG_ERR(MODULE, "Could not allocate manifest buffer");
+    return false;
+  }
+  const size_t read = Storage.readFileToBuffer(path.c_str(), buf.get(), MANIFEST_BUF_SIZE, MANIFEST_BUF_SIZE - 1);
   if (read == 0) {
     LOG_ERR(MODULE, "Could not read manifest: %s", path.c_str());
     return false;
   }
 
   JsonDocument doc;
-  const DeserializationError error = deserializeJson(doc, buf);
+  const DeserializationError error = deserializeJson(doc, buf.get());
   if (error) {
     LOG_ERR(MODULE, "Manifest parse failed: %s", path.c_str());
     return false;
@@ -201,10 +240,15 @@ bool StudyPackReader::readEpisodeLine(const StudyPackInfo& pack, const bool byId
     return false;
   }
 
-  char line[JSONL_LINE_SIZE];
+  std::unique_ptr<char[]> line(new (std::nothrow) char[JSONL_LINE_SIZE]);
+  if (!line) {
+    LOG_ERR(MODULE, "Could not allocate episode line buffer");
+    file.close();
+    return false;
+  }
   int index = 0;
   bool overflow = false;
-  while (readLine(file, line, sizeof(line), overflow)) {
+  while (readLine(file, line.get(), JSONL_LINE_SIZE, overflow)) {
     if (line[0] == '\0') {
       continue;
     }
@@ -214,7 +258,7 @@ bool StudyPackReader::readEpisodeLine(const StudyPackInfo& pack, const bool byId
     }
 
     JsonDocument doc;
-    const DeserializationError error = deserializeJson(doc, line);
+    const DeserializationError error = deserializeJson(doc, line.get());
     if (error) {
       LOG_ERR(MODULE, "Episode parse failed at %d", index);
       continue;
@@ -235,7 +279,8 @@ bool StudyPackReader::readEpisodeLine(const StudyPackInfo& pack, const bool byId
 }
 
 bool StudyPackReader::loadRubricActions(const StudyPackInfo& pack, const std::string& rubricId,
-                                        std::vector<std::string>& actions) const {
+                                        const std::vector<std::string>& actionIds,
+                                        std::vector<StudyAction>& actions) const {
   actions.clear();
   if (rubricId.empty()) {
     return false;
@@ -247,14 +292,18 @@ bool StudyPackReader::loadRubricActions(const StudyPackInfo& pack, const std::st
     return false;
   }
 
-  char line[JSONL_LINE_SIZE];
+  std::unique_ptr<char[]> line(new (std::nothrow) char[JSONL_LINE_SIZE]);
+  if (!line) {
+    file.close();
+    return false;
+  }
   bool overflow = false;
-  while (readLine(file, line, sizeof(line), overflow)) {
+  while (readLine(file, line.get(), JSONL_LINE_SIZE, overflow)) {
     if (overflow || line[0] == '\0') {
       continue;
     }
     JsonDocument doc;
-    if (deserializeJson(doc, line)) {
+    if (deserializeJson(doc, line.get())) {
       continue;
     }
     const char* id = doc["id"] | "";
@@ -264,8 +313,18 @@ bool StudyPackReader::loadRubricActions(const StudyPackInfo& pack, const std::st
     JsonArrayConst arr = doc["actions"].as<JsonArrayConst>();
     for (JsonObjectConst action : arr) {
       const char* actionId = action["id"] | "";
-      if (actionId && *actionId) {
-        actions.emplace_back(actionId);
+      if (!containsActionId(actionIds, actionId)) {
+        continue;
+      }
+      StudyAction out;
+      copyString(out.id, action["id"]);
+      copyString(out.label, action["label"]);
+      copyString(out.meaning, action["meaning"]);
+      if (!out.id.empty()) {
+        if (out.label.empty()) {
+          out.label = out.id;
+        }
+        actions.push_back(out);
       }
     }
     file.close();

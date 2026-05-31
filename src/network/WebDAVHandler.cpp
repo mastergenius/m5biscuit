@@ -16,6 +16,39 @@ constexpr size_t HIDDEN_ITEMS_COUNT = sizeof(HIDDEN_ITEMS) / sizeof(HIDDEN_ITEMS
 // ESP32 doesn't have real-time clock set by default, so we use a fixed epoch date
 // as a fallback. The date is not critical for WebDAV Class 1 operations.
 const char* FIXED_DATE = "Thu, 01 Jan 2024 00:00:00 GMT";
+
+void resetTaskWatchdogIfSubscribed() {
+  if (esp_task_wdt_status(nullptr) == ESP_OK) {
+    esp_task_wdt_reset();
+  }
+}
+
+bool streamFileToClient(WebServer& s, HalFile& file, const char* contentType) {
+  s.setContentLength(file.size());
+  s.send(200, contentType, "");
+
+  NetworkClient client = s.client();
+  uint8_t buffer[4096];
+  bool ok = true;
+  while (ok && file.available()) {
+    const int result = file.read(buffer, sizeof(buffer));
+    if (result <= 0) {
+      break;
+    }
+    size_t written = 0;
+    while (written < static_cast<size_t>(result)) {
+      resetTaskWatchdogIfSubscribed();
+      const size_t chunk = client.write(buffer + written, static_cast<size_t>(result) - written);
+      if (chunk == 0) {
+        ok = false;
+        break;
+      }
+      written += chunk;
+    }
+  }
+  client.clear();
+  return ok;
+}
 }  // namespace
 
 // ── RequestHandler interface ─────────────────────────────────────────────────
@@ -94,7 +127,7 @@ void WebDAVHandler::raw(WebServer& server, const String& uri, HTTPRaw& raw) {
 
   } else if (raw.status == RAW_WRITE) {
     if (_putFile && _putOk) {
-      esp_task_wdt_reset();
+      resetTaskWatchdogIfSubscribed();
       size_t written = _putFile.write(raw.buf, raw.currentSize);
       if (written != raw.currentSize) {
         _putOk = false;
@@ -269,7 +302,7 @@ void WebDAVHandler::handlePropfind(WebServer& s) {
 
       file.close();
       yield();
-      esp_task_wdt_reset();
+      resetTaskWatchdogIfSubscribed();
       file = root.openNextFile();
     }
   }
@@ -341,11 +374,7 @@ void WebDAVHandler::handleGet(WebServer& s) {
   }
 
   String contentType = getMimeType(path);
-  s.setContentLength(file.size());
-  s.send(200, contentType.c_str(), "");
-
-  NetworkClient client = s.client();
-  client.write(file);
+  streamFileToClient(s, file, contentType.c_str());
   file.close();
 }
 
@@ -645,7 +674,7 @@ void WebDAVHandler::handleCopy(WebServer& s) {
   uint8_t buf[4096];
   bool copyOk = true;
   while (srcFile.available()) {
-    esp_task_wdt_reset();
+    resetTaskWatchdogIfSubscribed();
     int bytesRead = srcFile.read(buf, sizeof(buf));
     if (bytesRead <= 0) break;
     size_t written = dstFile.write(buf, bytesRead);

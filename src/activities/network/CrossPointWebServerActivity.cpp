@@ -30,6 +30,21 @@ constexpr int QR_CODE_HEIGHT = 198;
 // DNS server for captive portal (redirects all DNS queries to our IP)
 DNSServer* dnsServer = nullptr;
 constexpr uint16_t DNS_PORT = 53;
+
+void drawUrlAndToken(GfxRenderer& renderer, const int fontId, const int x, int& y, const std::string& url,
+                     const std::string& token) {
+  renderer.drawText(fontId, x, y, url.c_str());
+  y += renderer.getLineHeight(fontId) + 4;
+  renderer.drawText(SMALL_FONT_ID, x, y, (std::string("?token=") + token).c_str());
+  y += renderer.getLineHeight(SMALL_FONT_ID) + 4;
+}
+
+void drawCenteredUrlAndToken(GfxRenderer& renderer, int& y, const std::string& url, const std::string& token) {
+  renderer.drawCenteredText(UI_10_FONT_ID, y, url.c_str(), true);
+  y += renderer.getLineHeight(UI_10_FONT_ID) + 5;
+  renderer.drawCenteredText(SMALL_FONT_ID, y, (std::string("?token=") + token).c_str(), true);
+  y += renderer.getLineHeight(SMALL_FONT_ID) + 5;
+}
 }  // namespace
 
 void CrossPointWebServerActivity::onEnter() {
@@ -402,17 +417,18 @@ void CrossPointWebServerActivity::renderServerRunning() const {
     startY += height10 + metrics.verticalSpacing * 2;
 
     std::string hostnameUrl = std::string("http://") + AP_HOSTNAME + ".local/?token=" + sessionToken;
-    std::string ipUrl = tr(STR_OR_HTTP_PREFIX) + connectedIP + "/?token=" + sessionToken;
+    std::string hostnameBaseUrl = std::string("http://") + AP_HOSTNAME + ".local/";
+    std::string ipBaseUrl = std::string(tr(STR_OR_HTTP_PREFIX)) + connectedIP + "/";
 
     // Show QR code for URL
     const Rect qrBoundsUrl(metrics.contentSidePadding, startY, QR_CODE_WIDTH, QR_CODE_HEIGHT);
     QrUtils::drawQrCode(renderer, qrBoundsUrl, hostnameUrl);
 
-    // Show IP address as fallback
-    renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding + QR_CODE_WIDTH + metrics.verticalSpacing, startY + 80,
-                      hostnameUrl.c_str());
-    renderer.drawText(SMALL_FONT_ID, metrics.contentSidePadding + QR_CODE_WIDTH + metrics.verticalSpacing, startY + 100,
-                      ipUrl.c_str());
+    // Show typed URLs without clipping the session token.
+    int textY = startY + 65;
+    const int textX = metrics.contentSidePadding + QR_CODE_WIDTH + metrics.verticalSpacing;
+    drawUrlAndToken(renderer, SMALL_FONT_ID, textX, textY, hostnameBaseUrl, sessionToken);
+    renderer.drawText(SMALL_FONT_ID, textX, textY, ipBaseUrl.c_str());
   } else {
     startY += metrics.verticalSpacing * 2;
 
@@ -429,12 +445,11 @@ void CrossPointWebServerActivity::renderServerRunning() const {
     QrUtils::drawQrCode(renderer, qrBounds, webInfo);
     startY += QR_CODE_HEIGHT + metrics.verticalSpacing * 2;
 
-    // Show web server URL prominently
-    renderer.drawCenteredText(UI_10_FONT_ID, startY, webInfo.c_str(), true);
-    startY += height10 + 5;
+    // Show web server URL prominently, splitting the token onto its own line so it remains readable.
+    drawCenteredUrlAndToken(renderer, startY, "http://" + connectedIP + "/", sessionToken);
 
-    // Also show hostname URL
-    std::string hostnameUrl = std::string(tr(STR_OR_HTTP_PREFIX)) + AP_HOSTNAME + ".local/?token=" + sessionToken;
+    // Also show hostname URL without repeating the long token.
+    std::string hostnameUrl = std::string(tr(STR_OR_HTTP_PREFIX)) + AP_HOSTNAME + ".local/";
     renderer.drawCenteredText(SMALL_FONT_ID, startY, hostnameUrl.c_str(), true);
   }
 

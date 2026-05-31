@@ -10,6 +10,7 @@
 
 void QrDisplayActivity::onEnter() {
   Activity::onEnter();
+  renderer.requestFullRefreshNextDisplay();
   requestUpdate();
 }
 
