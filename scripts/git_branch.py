@@ -1,8 +1,11 @@
 """
-PlatformIO pre-build script: inject git branch into CROSSPOINT_VERSION for
+PlatformIO pre-build script: inject a traceable CROSSPOINT_VERSION for
 development environments.
 
-Results in a version string like:  1.1.0-dev+feat-koysnc-xpath
+Results in a version string like:
+2026.05.31.1-m5paper+master.771fbaf
+2026.05.31.1-m5paper+master.771fbaf.dirty
+
 Release environments are unaffected; they set CROSSPOINT_VERSION in the ini.
 """
 
@@ -16,20 +19,31 @@ def warn(msg):
     print(f'WARNING [git_branch.py]: {msg}', file=sys.stderr)
 
 
+def run_git(project_dir, *args):
+    return subprocess.check_output(
+        ['git', *args],
+        text=True, stderr=subprocess.PIPE, cwd=project_dir
+    ).strip()
+
+
+def clean_version_part(value, fallback='unknown'):
+    cleaned = []
+    for char in value:
+        if char.isalnum() or char in '._-':
+            cleaned.append(char)
+        else:
+            cleaned.append('-')
+    result = ''.join(cleaned).strip('.-_')
+    return result or fallback
+
+
 def get_git_branch(project_dir):
     try:
-        branch = subprocess.check_output(
-            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
-            text=True, stderr=subprocess.PIPE, cwd=project_dir
-        ).strip()
+        branch = run_git(project_dir, 'rev-parse', '--abbrev-ref', 'HEAD')
         # Detached HEAD — show the short SHA instead
         if branch == 'HEAD':
-            branch = subprocess.check_output(
-                ['git', 'rev-parse', '--short', 'HEAD'],
-                text=True, stderr=subprocess.PIPE, cwd=project_dir
-            ).strip()
-        # Strip characters that would break a C string literal
-        return ''.join(c for c in branch if c not in '"\\')
+            branch = run_git(project_dir, 'rev-parse', '--short', 'HEAD')
+        return clean_version_part(branch)
     except FileNotFoundError:
         warn('git not found on PATH; branch suffix will be "unknown"')
         return 'unknown'
@@ -39,6 +53,35 @@ def get_git_branch(project_dir):
     except Exception as e:
         warn(f'Unexpected error reading git branch: {e}; branch suffix will be "unknown"')
         return 'unknown'
+
+
+def get_git_sha(project_dir):
+    try:
+        return clean_version_part(run_git(project_dir, 'rev-parse', '--short=7', 'HEAD'))
+    except FileNotFoundError:
+        warn('git not found on PATH; sha suffix will be "unknown"')
+        return 'unknown'
+    except subprocess.CalledProcessError as e:
+        warn(f'git command failed (exit {e.returncode}): {e.stderr.strip()}; sha suffix will be "unknown"')
+        return 'unknown'
+    except Exception as e:
+        warn(f'Unexpected error reading git sha: {e}; sha suffix will be "unknown"')
+        return 'unknown'
+
+
+def get_dirty_suffix(project_dir):
+    try:
+        status = run_git(project_dir, 'status', '--porcelain')
+        return '.dirty' if status else ''
+    except FileNotFoundError:
+        warn('git not found on PATH; dirty marker will be omitted')
+        return ''
+    except subprocess.CalledProcessError as e:
+        warn(f'git command failed (exit {e.returncode}): {e.stderr.strip()}; dirty marker will be omitted')
+        return ''
+    except Exception as e:
+        warn(f'Unexpected error reading git status: {e}; dirty marker will be omitted')
+        return ''
 
 
 def get_base_version(project_dir):
@@ -51,7 +94,7 @@ def get_base_version(project_dir):
     if not config.has_option('biscuit', 'version'):
         warn('No [biscuit] version in platformio.ini; base version will be "0.0.0"')
         return '0.0.0'
-    return config.get('biscuit', 'version')
+    return clean_version_part(config.get('biscuit', 'version'), fallback='0.0.0')
 
 
 def inject_version(env):
@@ -59,7 +102,7 @@ def inject_version(env):
     # via build_flags in platformio.ini and are unaffected.
     env_name = env['PIOENV']
     dev_suffixes = {
-        'default': 'dev',
+        'default': 'default',
         'm5paper': 'm5paper',
     }
     if env_name not in dev_suffixes:
@@ -68,7 +111,9 @@ def inject_version(env):
     project_dir = env['PROJECT_DIR']
     base_version = get_base_version(project_dir)
     branch = get_git_branch(project_dir)
-    version_string = f'{base_version}-{dev_suffixes[env_name]}+{branch}'
+    sha = get_git_sha(project_dir)
+    dirty = get_dirty_suffix(project_dir)
+    version_string = f'{base_version}-{dev_suffixes[env_name]}+{branch}.{sha}{dirty}'
 
     env.Append(CPPDEFINES=[('CROSSPOINT_VERSION', f'\\"{version_string}\\"')])
     print(f'biscuit. build version: {version_string}')

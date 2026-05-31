@@ -423,10 +423,10 @@ void loop() {
       } else if (cmd == "STATUS") {
 #if BISCUIT_BOARD_M5PAPER
         const String ip = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : String("");
-        logSerial.printf("STATUS:wifi=%d,ip=%s,heap=%u,psram=%u\n", static_cast<int>(WiFi.status()), ip.c_str(),
-                         ESP.getFreeHeap(), ESP.getFreePsram());
+        logSerial.printf("STATUS:firmware=%s,wifi=%d,ip=%s,heap=%u,psram=%u\n", CROSSPOINT_VERSION,
+                         static_cast<int>(WiFi.status()), ip.c_str(), ESP.getFreeHeap(), ESP.getFreePsram());
 #else
-        logSerial.printf("STATUS:heap=%u\n", ESP.getFreeHeap());
+        logSerial.printf("STATUS:firmware=%s,heap=%u\n", CROSSPOINT_VERSION, ESP.getFreeHeap());
 #endif
         serialCommandHandled = true;
       } else if (cmd == "HOME") {
